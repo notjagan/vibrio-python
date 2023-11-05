@@ -14,15 +14,15 @@ except ImportError:
 
 
 class UnsupportedPlatformError(ValueError):
-    pass
+    """Error caused by attempting to execute on an unsupported platform/architecture."""
 
 
 class ServerStateException(Exception):
-    pass
+    """Exception due to attempting to induce an invalid server state transition."""
 
 
 class ServerError(Exception):
-    pass
+    """Unknown/unexpected server-side error."""
 
 
 def get_vibrio_path(plat: str, arch: str) -> Path:
@@ -83,7 +83,7 @@ class Server:
 def find_open_port() -> int:
     """Returns a port not currently in use on the system."""
     with socket.socket() as sock:
-        sock.bind(('', 0))
+        sock.bind(("", 0))
         return sock.getsockname()[1]
 
 

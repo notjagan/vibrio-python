@@ -9,6 +9,8 @@ from setuptools.dist import Distribution
 
 
 class PrecompiledDistribution(Distribution):
+    """Represents a distribution with solely precompiled extensions."""
+
     def iter_distribution_names(self) -> Generator[str, None, None]:
         """Override base method to ignore extension modules."""
         for pkg in self.packages or ():
@@ -27,10 +29,12 @@ class PrecompiledExtension(Extension):
 
 
 class UnsupportedPlatformError(ValueError):
-    pass
+    """Error caused by attempting to build on an unsupported platform/architecture."""
 
 
 class BuildPrecompiledExtensions(build_ext):
+    """Describes the build process for a package with only precompiled extensions."""
+
     def suffix(self) -> str:
         """Determines executable file suffix for the current build platform."""
         if self.plat_name == "win-amd64":
