@@ -24,7 +24,7 @@ class PrecompiledExtension(Extension):
         super().__init__(self.path.name, [])
 
 
-class UnsupportedPlatformException(Exception):
+class UnsupportedPlatformError(ValueError):
     pass
 
 
@@ -43,9 +43,7 @@ class BuildPrecompiledExtensions(build_ext):
             return ".linux-x64"
         elif self.plat_name == "manylinux1_arm64":
             return ".linux-arm64"
-        raise UnsupportedPlatformException(
-            f'Platform "{self.plat_name}" not recognized.'
-        )
+        raise UnsupportedPlatformError(f'Platform "{self.plat_name}" is not supported')
 
     def run(self):
         for ext in self.extensions:
