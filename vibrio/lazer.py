@@ -1,5 +1,6 @@
 import atexit
 import platform
+import socket
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,10 @@ class UnsupportedPlatformError(ValueError):
 
 
 class ServerStateException(Exception):
+    pass
+
+
+class ServerError(Exception):
     pass
 
 
@@ -45,16 +50,23 @@ def get_vibrio_path(plat: str, arch: str) -> Path:
 
 
 class Server:
-    def __init__(self) -> None:
+    def __init__(self, port: int) -> None:
+        self.port = port
         self.vibrio_path = get_vibrio_path(platform.system(), platform.machine())
         if not self.vibrio_path.exists():
             raise FileNotFoundError(f'No executable found at "{self.vibrio_path}".')
         self.process: Optional[subprocess.Popen] = None
 
+    def address(self) -> str:
+        return f"http://localhost:{self.port}"
+
     def start(self) -> None:
         """Spawns `vibrio` server executable as a subprocess."""
         if self.process is None:
-            self.process = subprocess.Popen(self.vibrio_path, stdout=subprocess.DEVNULL)
+            self.process = subprocess.Popen(
+                [self.vibrio_path, "--urls", self.address()],
+                stdout=subprocess.DEVNULL,
+            )
             atexit.register(self.stop)
         else:
             raise ServerStateException("Server is already running")
@@ -66,9 +78,16 @@ class Server:
             self.process = None
 
 
+def find_open_port() -> int:
+    """Returns a port not currently in use on the system."""
+    with socket.socket() as sock:
+        sock.bind(("", 0))
+        return sock.getsockname()[1]
+
+
 class Lazer:
     def __init__(self) -> None:
-        self.server = Server()
+        self.server = Server(find_open_port())
 
     def start(self) -> None:
         self.server.start()
