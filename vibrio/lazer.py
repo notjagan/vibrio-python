@@ -1,9 +1,10 @@
 import atexit
+import io
 import platform
 import socket
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import BinaryIO, Optional
 
 import requests
 
@@ -23,6 +24,10 @@ class ServerStateException(Exception):
 
 class ServerError(Exception):
     """Unknown/unexpected server-side error."""
+
+
+class BeatmapNotFound(FileNotFoundError):
+    """Exception caused by missing/unknown beatmap."""
 
 
 def get_vibrio_path(plat: str, arch: str) -> Path:
@@ -111,7 +116,7 @@ class Lazer:
 
     def has_beatmap(self, beatmap_id: int) -> bool:
         """Checks if given beatmap is cached/available locally."""
-        response = requests.get(self.url(f"beatmaps/{beatmap_id}"))
+        response = requests.get(self.url(f"beatmaps/{beatmap_id}/status"))
         if response.status_code == 200:
             return True
         elif response.status_code == 404:
@@ -119,3 +124,17 @@ class Lazer:
         raise ServerError(
             f"Unexpected status code {response.status_code}; check server logs for error details"
         )
+
+    def get_beatmap(self, beatmap_id: int) -> BinaryIO:
+        response = requests.get(self.url(f"beatmaps/{beatmap_id}"))
+        if response.status_code == 200:
+            stream = io.BytesIO()
+            stream.write(response.content)
+            stream.seek(0)
+            return stream
+        elif response.status_code == 404:
+            raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+        else:
+            raise ServerError(
+                f"Unexpected status code {response.status_code}; check server logs for error details"
+            )
