@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+import requests
+
 try:
     from typing import Self
 except ImportError:
@@ -81,7 +83,7 @@ class Server:
 def find_open_port() -> int:
     """Returns a port not currently in use on the system."""
     with socket.socket() as sock:
-        sock.bind(("", 0))
+        sock.bind(('', 0))
         return sock.getsockname()[1]
 
 
@@ -102,3 +104,18 @@ class Lazer:
     def __exit__(self, *_) -> bool:
         self.stop()
         return False
+
+    def url(self, endpoint: str) -> str:
+        """Constructs API URL for a given endpoint."""
+        return f"{self.server.address()}/api/{endpoint}"
+
+    def has_beatmap(self, beatmap_id: int) -> bool:
+        """Checks if given beatmap is cached/available locally."""
+        response = requests.get(self.url(f"beatmaps/{beatmap_id}"))
+        if response.status_code == 200:
+            return True
+        elif response.status_code == 404:
+            return False
+        raise ServerError(
+            f"Unexpected status code {response.status_code}; check server logs for error details"
+        )
