@@ -19,6 +19,8 @@ class PrecompiledDistribution(Distribution):
 
 
 class PrecompiledExtension(Extension):
+    """Represents an extension module with an existing executable file."""
+
     def __init__(self, path: Path):
         self.path = path
         super().__init__(self.path.name, [])
@@ -30,6 +32,7 @@ class UnsupportedPlatformError(ValueError):
 
 class BuildPrecompiledExtensions(build_ext):
     def suffix(self) -> str:
+        """Determines executable file suffix for the current build platform."""
         if self.plat_name == "win-amd64":
             return ".win-x64.exe"
         elif self.plat_name == "win32":
@@ -46,6 +49,7 @@ class BuildPrecompiledExtensions(build_ext):
         raise UnsupportedPlatformError(f'Platform "{self.plat_name}" is not supported')
 
     def run(self):
+        """Directly copies relevant executable extension(s)."""
         for ext in self.extensions:
             if isinstance(ext, PrecompiledExtension) and ext.path.name.endswith(
                 self.suffix()
@@ -55,6 +59,7 @@ class BuildPrecompiledExtensions(build_ext):
 
 
 def find_extensions(directory: Path) -> list[PrecompiledExtension]:
+    """Creates extension modules from all files in a directory."""
     return [PrecompiledExtension(path) for path in directory.glob("*")]
 
 

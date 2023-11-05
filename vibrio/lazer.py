@@ -38,7 +38,7 @@ def get_vibrio_path(plat: str, arch: str) -> Path:
             suffix = "osx-arm64"
     else:
         raise UnsupportedPlatformError(
-            f'Platform "{plat}" with architecture "{arch}" is not supported.'
+            f'Platform "{plat}" with architecture "{arch}" is not supported'
         )
 
     return Path(__file__).parent.absolute() / "lib" / f"vibrio.{suffix}"
