@@ -24,7 +24,7 @@ jobs:
             pip install requests toml &&
             python setup.py vendor
           CIBW_TEST_REQUIRES: pytest
-          CIBW_TEST_COMMAND: "pytest {project}/tests"
+          CIBW_TEST_COMMAND: "pytest {project}"
         with:
           package-dir: .
           output-dir: dist
