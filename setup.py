@@ -57,7 +57,6 @@ class BuildPrecompiledExtensions(build_ext):
             return ".linux-arm64"
         raise UnsupportedPlatformError(f'Platform "{self.plat_name}" is not supported')
 
-
     def run(self):
         """Directly copies relevant executable extension(s)."""
         for ext in self.extensions:
@@ -65,6 +64,8 @@ class BuildPrecompiledExtensions(build_ext):
                 self.suffix()
             ):
                 dest = Path(self.build_lib) / ext.path.parent
+                print(self.build_lib)
+                print(dest)
                 dest.mkdir(parents=True, exist_ok=True)
                 shutil.copy(ext.path, dest)
 
