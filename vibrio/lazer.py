@@ -2,6 +2,7 @@ import atexit
 import io
 import platform
 import socket
+import stat
 import subprocess
 from pathlib import Path
 from typing import BinaryIO, Optional
@@ -58,7 +59,7 @@ class Server:
         self.vibrio_path = get_vibrio_path(platform.system(), platform.machine())
         if not self.vibrio_path.exists():
             raise FileNotFoundError(f'No executable found at "{self.vibrio_path}".')
-        print("Mode:", self.vibrio_path.stat().st_mode)
+        self.vibrio_path.chmod(self.vibrio_path.stat().st_mode | stat.S_IEXEC)
         self.process: Optional[subprocess.Popen] = None
 
     def address(self) -> str:
