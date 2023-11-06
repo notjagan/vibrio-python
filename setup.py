@@ -64,7 +64,7 @@ class BuildPrecompiledExtensions(build_ext):
                 self.suffix()
             ):
                 dest = Path(self.build_lib) / ext.path.parent.relative_to(
-                    Path(__file__).parent
+                    Path(__file__).parent.absolute()
                 )
                 dest.mkdir(parents=True, exist_ok=True)
                 shutil.copy(ext.path, dest)
