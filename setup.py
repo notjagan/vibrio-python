@@ -63,9 +63,9 @@ class BuildPrecompiledExtensions(build_ext):
             if isinstance(ext, PrecompiledExtension) and ext.path.name.endswith(
                 self.suffix()
             ):
-                dest = Path(self.build_lib) / ext.path.parent
-                print(self.build_lib)
-                print(dest)
+                dest = Path(self.build_lib) / ext.path.parent.relative_to(
+                    Path(__file__).parent
+                )
                 dest.mkdir(parents=True, exist_ok=True)
                 shutil.copy(ext.path, dest)
 
