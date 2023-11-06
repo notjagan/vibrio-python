@@ -4,9 +4,17 @@ version = "0.1.0"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
+dependencies = [
+    "requests ~= 2.31",
+    "typing_extensions ~= 4.8"
+]
 
 [build-system]
-requires = ["setuptools ~= 57.0", "requests ~= 2.31", "toml ~= 0.10"]
+requires = [
+    "setuptools ~= 57.0",
+    "requests ~= 2.31",
+    "toml ~= 0.10"
+]
 
 [tool.setuptools]
 packages = ["vibrio"]
