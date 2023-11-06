@@ -5,5 +5,11 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
 
+[build-system]
+requires = ["setuptools ~= 57.0", "requests ~= 2.31", "toml ~= 0.10"]
+
 [tool.setuptools]
 packages = ["vibrio"]
+
+[tool.vendor]
+release = "v0.1.0-alpha"
