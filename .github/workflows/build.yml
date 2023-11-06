@@ -24,9 +24,9 @@ jobs:
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: "pytest {project}/tests"
         with:
-          package-dir: ./vibrio
-          output-dir: ./dist
-          config-file: ./pyproject.toml
+          package-dir: .
+          output-dir: dist
+          config-file: pyproject.toml
 
       - uses: actions/upload-artifact@v3
         with:
