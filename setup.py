@@ -1,4 +1,5 @@
 import shutil
+import stat
 from pathlib import Path
 from typing import Generator, Optional
 from zipfile import ZipFile
@@ -63,11 +64,12 @@ class BuildPrecompiledExtensions(build_ext):
             if isinstance(ext, PrecompiledExtension) and ext.path.name.endswith(
                 self.suffix()
             ):
-                dest = Path(self.build_lib) / ext.path.parent.relative_to(
+                dest = Path(self.build_lib) / ext.path.relative_to(
                     Path(__file__).parent.absolute()
                 )
-                dest.mkdir(parents=True, exist_ok=True)
-                shutil.copy(ext.path, dest)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(ext.path, dest.parent)
+                dest.chmod(dest.stat().st_mode | stat.S_IEXEC)
 
 
 def find_extensions(directory: Path) -> list[PrecompiledExtension]:
