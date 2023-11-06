@@ -20,7 +20,9 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.2
         env:
-          CIBW_BEFORE_BUILD: python setup.py vendor
+          CIBW_BEFORE_ALL: >
+            pip install requests toml
+            python setup.py vendor
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: "pytest {project}/tests"
         with:
