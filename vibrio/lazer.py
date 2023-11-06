@@ -122,6 +122,7 @@ class Lazer:
         )
 
     def get_beatmap(self, beatmap_id: int) -> BinaryIO:
+        """Returns a file stream for the given beatmap."""
         response = requests.get(self.url(f"beatmaps/{beatmap_id}"))
         if response.status_code == 200:
             stream = io.BytesIO()
