@@ -22,7 +22,7 @@ jobs:
         with:
           package-dir: ./vibrio
           output-dir: dist
-          config-file: "{package}/pyproject.toml"
+          config-file: pyproject.toml
 
       - uses: actions/upload-artifact@v3
         with:
