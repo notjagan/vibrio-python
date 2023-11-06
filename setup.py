@@ -41,20 +41,22 @@ class BuildPrecompiledExtensions(build_ext):
 
     def suffix(self) -> str:
         """Determines executable file suffix for the current build platform."""
-        if self.plat_name == "win-amd64":
+        sanitized = self.plat_name.replace("-", "_")
+        if sanitized == "win_amd64" or sanitized == "win_x86_64":
             return ".win-x64.exe"
-        elif self.plat_name == "win32":
+        elif sanitized == "win32":
             return ".win-x86.exe"
-        elif self.plat_name.startswith("macosx"):
-            if self.plat_name.endswith("x86_64"):
+        elif sanitized.startswith("macosx"):
+            if sanitized.endswith("x86_64"):
                 return ".osx-x64"
-            elif self.plat_name.endswith("arm64"):
+            elif sanitized.endswith("arm64"):
                 return ".osx-arm64"
-        elif self.plat_name == "manylinux1_x86_64":
+        elif sanitized == "linux_x86_64":
             return ".linux-x64"
-        elif self.plat_name == "manylinux1_arm64":
+        elif sanitized == "linux_arm64":
             return ".linux-arm64"
         raise UnsupportedPlatformError(f'Platform "{self.plat_name}" is not supported')
+
 
     def run(self):
         """Directly copies relevant executable extension(s)."""
