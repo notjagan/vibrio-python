@@ -1,10 +1,13 @@
+import os
 import shutil
+import stat
+import subprocess
 from pathlib import Path
 from typing import Generator, Optional
 from zipfile import ZipFile
 
-import requests
 import toml
+from git import Repo
 from setuptools import Command, Extension, setup
 from setuptools.command.build_ext import build_ext
 from setuptools.dist import Distribution
@@ -32,37 +35,13 @@ class PrecompiledExtension(Extension):
         super().__init__(self.path.name, [])
 
 
-class UnsupportedPlatformError(ValueError):
-    """Error caused by attempting to build on an unsupported platform/architecture."""
-
-
 class BuildPrecompiledExtensions(build_ext):
     """Describes the build process for a package with only precompiled extensions."""
-
-    def suffix(self) -> str:
-        """Determines executable file suffix for the current build platform."""
-        sanitized = self.plat_name.replace("-", "_")
-        if sanitized == "win_amd64" or sanitized == "win_x86_64":
-            return ".win-x64.exe"
-        elif sanitized == "win32":
-            return ".win-x86.exe"
-        elif sanitized.startswith("macosx"):
-            if sanitized.endswith("x86_64"):
-                return ".osx-x64"
-            elif sanitized.endswith("arm64"):
-                return ".osx-arm64"
-        elif sanitized == "linux_x86_64":
-            return ".linux-x64"
-        elif sanitized == "linux_arm64":
-            return ".linux-arm64"
-        raise UnsupportedPlatformError(f'Platform "{self.plat_name}" is not supported')
 
     def run(self):
         """Directly copies relevant executable extension(s)."""
         for ext in self.extensions:
-            if isinstance(ext, PrecompiledExtension) and ext.path.name.endswith(
-                self.suffix()
-            ):
+            if isinstance(ext, PrecompiledExtension):
                 dest = Path(self.build_lib) / ext.path.relative_to(
                     Path(__file__).parent.absolute()
                 )
@@ -75,36 +54,52 @@ def find_extensions(directory: Path) -> list[PrecompiledExtension]:
     return [PrecompiledExtension(path) for path in directory.glob("*")]
 
 
-class VendorBinaries(Command):
-    """Command to download server executables from GitHub release."""
+class MSBuild(Command):
+    """Command to build server executables from GitHub repository."""
 
-    user_options = [("tag=", "t", "Tag associated with release version of server")]
+    user_options = [
+        ("repo=", "R", "Server repository URL"),
+        ("ref=", "r", "Git version reference (commit ID, tag, etc.)")
+    ]
 
     def initialize_options(self) -> None:
-        self.tag: Optional[str] = None
+        self.url: Optional[str] = None
+        self.ref: Optional[str] = None
 
     def finalize_options(self) -> None:
         pyproject_path = Path(__file__).parent.absolute() / "pyproject.toml"
         with pyproject_path.open() as pyproject:
             config = toml.load(pyproject)
-        if self.tag is None:
-            self.tag = config["tool"]["vendor"]["release"]
+        if self.url is None:
+            self.url = config["tool"]["vendor"]["repository"]
+        if self.ref is None:
+            self.ref = config["tool"]["vendor"]["reference"]
 
     def run(self) -> None:
-        shutil.rmtree(VENDOR_DIR, ignore_errors=True)
+        def onerror(func, path, ex_info):
+            ex, *_ = ex_info
+            # resolve any permission issues
+            if issubclass(ex, PermissionError) and not os.access(path, os.W_OK):
+                os.chmod(path, stat.S_IWUSR)
+                func(path)
+            else:
+                raise
+
+        shutil.rmtree(VENDOR_DIR, onerror=onerror)
         VENDOR_DIR.mkdir(parents=True, exist_ok=True)
 
-        response = requests.get(
-            f"https://api.github.com/repos/notjagan/vibrio/releases/tags/{self.tag}"
-        )
-        release = response.json()
+        assert self.url is not None
+        server_path = VENDOR_DIR / "server"
+        repo = Repo.clone_from(self.url, server_path, no_checkout=True)
+        repo.git.checkout(self.ref)
+        subprocess.call(["msbuild", "/m", "/t:FullClean;Publish", "/Restore"], cwd=server_path / "Vibrio")
+        
+        publish_dir = server_path / "publish"
+        for file in publish_dir.glob("*"):
+            file.rename(VENDOR_DIR / file.name)
+        shutil.rmtree(server_path, onerror=onerror)
 
-        for asset in release["assets"]:
-            name: str = asset["name"]
-            zip_path = (VENDOR_DIR / name).with_suffix(".zip")
-            with zip_path.open("wb") as zip_file:
-                zip_file.write(requests.get(asset["browser_download_url"]).content)
-
+        for zip_path in VENDOR_DIR.glob("*.zip"):
             with ZipFile(zip_path, "r") as zip_file:
                 zip_file.extractall(VENDOR_DIR)
             zip_path.unlink()
@@ -112,6 +107,6 @@ class VendorBinaries(Command):
 
 setup(
     ext_modules=find_extensions(VENDOR_DIR),
-    cmdclass={"build_ext": BuildPrecompiledExtensions, "vendor": VendorBinaries},
+    cmdclass={"build_ext": BuildPrecompiledExtensions, "msbuild": MSBuild},
     distclass=PrecompiledDistribution,
 )

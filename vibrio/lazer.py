@@ -11,10 +11,6 @@ import requests
 from typing_extensions import Self
 
 
-class UnsupportedPlatformError(ValueError):
-    """Error caused by attempting to execute on an unsupported platform/architecture."""
-
-
 class ServerStateException(Exception):
     """Exception due to attempting to induce an invalid server state transition."""
 
@@ -27,36 +23,20 @@ class BeatmapNotFound(FileNotFoundError):
     """Exception caused by missing/unknown beatmap."""
 
 
-def get_vibrio_path(plat: str, arch: str) -> Path:
-    """Determines path to server executable on a given platform and architecture."""
-    suffix = ""
-    if plat == "Windows":
-        if arch == "x86_64" or arch == "AMD64":
-            suffix = "win-x64.exe"
-        elif arch == "i386":
-            suffix = "win-x86.exe"
-    elif plat == "Linux":
-        if arch == "x86_64":
-            suffix = "linux-x64"
-        elif arch == "arm64":
-            suffix = "linux-arm64"
-    elif plat == "Darwin":
-        if arch == "x86_64":
-            suffix = "osx-x64"
-        elif arch == "arm64":
-            suffix = "osx-arm64"
+def get_vibrio_path(platform: str) -> Path:
+    """Determines path to server executable on a given platform."""
+    if platform == "Windows":
+        suffix = ".exe"
     else:
-        raise UnsupportedPlatformError(
-            f'Platform "{plat}" with architecture "{arch}" is not supported'
-        )
+        suffix = ""
 
-    return Path(__file__).parent.absolute() / "lib" / f"vibrio.{suffix}"
+    return Path(__file__).parent.absolute() / "lib" / f"Vibrio{suffix}"
 
 
 class Server:
     def __init__(self, port: int) -> None:
         self.port = port
-        self.vibrio_path = get_vibrio_path(platform.system(), platform.machine())
+        self.vibrio_path = get_vibrio_path(platform.system())
         if not self.vibrio_path.exists():
             raise FileNotFoundError(f'No executable found at "{self.vibrio_path}".')
         self.vibrio_path.chmod(self.vibrio_path.stat().st_mode | stat.S_IEXEC)

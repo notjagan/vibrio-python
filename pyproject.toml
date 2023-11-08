@@ -12,8 +12,8 @@ dependencies = [
 [build-system]
 build-backend = "setuptools.build_meta"
 requires = [
-    "setuptools==68.2.2",
-    "requests",
+    "setuptools>=68.2",
+    "GitPython",
     "toml"
 ]
 
@@ -21,4 +21,5 @@ requires = [
 packages = ["vibrio"]
 
 [tool.vendor]
-release = "v0.1.0-alpha"
+repository = "git@github.com:notjagan/vibrio.git"
+reference = "v0.1.0-alpha"
