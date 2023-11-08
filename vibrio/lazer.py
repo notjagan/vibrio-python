@@ -70,8 +70,11 @@ class Server:
         if self.process is None:
             self.process = subprocess.Popen(
                 [self.vibrio_path, "--urls", self.address()],
-                stdout=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
             )
+            assert self.process.stdout is not None
+            # block until webserver launches
+            self.process.stdout.readline()
             atexit.register(self.stop)
         else:
             raise ServerStateException("Server is already running")
