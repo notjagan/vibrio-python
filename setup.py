@@ -92,7 +92,7 @@ class MSBuild(Command):
         server_path = VENDOR_DIR / "server"
         repo = Repo.clone_from(self.url, server_path, no_checkout=True)
         repo.git.checkout(self.ref)
-        subprocess.call(["msbuild", "/m", "/t:FullClean;Publish", "/Restore"], cwd=server_path / "Vibrio")
+        subprocess.call(["dotnet", "msbuild", "/m", "/t:FullClean;Publish", "/Restore"], cwd=server_path / "Vibrio")
         
         publish_dir = server_path / "publish"
         for file in publish_dir.glob("*"):
