@@ -79,9 +79,11 @@ class MSBuild(Command):
         def onerror(func, path, ex_info):
             ex, *_ = ex_info
             # resolve any permission issues
-            if issubclass(ex, PermissionError) and not os.access(path, os.W_OK):
+            if ex is PermissionError and not os.access(path, os.W_OK):
                 os.chmod(path, stat.S_IWUSR)
                 func(path)
+            elif ex is FileNotFoundError:
+                pass
             else:
                 raise
 
