@@ -25,7 +25,9 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.2
         env:
-          CIBW_BEFORE_BUILD: python setup.py msbuild
+          CIBW_BEFORE_BUILD: >
+            pip install toml GitPython &&
+            python setup.py msbuild
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: "pytest {project}"
         with:
