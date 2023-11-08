@@ -84,8 +84,9 @@ class VendorBinaries(Command):
         self.tag: Optional[str] = None
 
     def finalize_options(self) -> None:
-        with open(Path(__file__).parent.absolute() / "pyproject.toml") as file:
-            config = toml.load(file)
+        pyproject_path = Path(__file__).parent.absolute() / "pyproject.toml"
+        with pyproject_path.open() as pyproject:
+            config = toml.load(pyproject)
         if self.tag is None:
             self.tag = config["tool"]["vendor"]["release"]
 
@@ -101,11 +102,11 @@ class VendorBinaries(Command):
         for asset in release["assets"]:
             name: str = asset["name"]
             zip_path = (VENDOR_DIR / name).with_suffix(".zip")
-            with open(zip_path, "wb") as file:
-                file.write(requests.get(asset["browser_download_url"]).content)
+            with zip_path.open("wb") as zip_file:
+                zip_file.write(requests.get(asset["browser_download_url"]).content)
 
-            with ZipFile(zip_path, "r") as zipfile:
-                zipfile.extractall(VENDOR_DIR)
+            with ZipFile(zip_path, "r") as zip_file:
+                zip_file.extractall(VENDOR_DIR)
             zip_path.unlink()
 
 
