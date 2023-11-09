@@ -24,14 +24,8 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.2
         env:
-          CIBW_BEFORE_ALL_LINUX: >
-            curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --version 6.0.416 &&
-            yum install libicu
-          CIBW_BEFORE_BUILD: >
-            export DOTNET_ROOT=$HOME/.dotnet &&
-            export PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools &&
-            pip install toml GitPython &&
-            python setup.py msbuild
+          CIBW_BEFORE_ALL_LINUX: curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --version 6.0.416
+          CIBW_ENVIRONMENT_LINUX: DOTNET_ROOT=$HOME/.dotnet PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: "pytest {project}"
         with:

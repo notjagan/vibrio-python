@@ -8,7 +8,8 @@ from zipfile import ZipFile
 
 import toml
 from git import Repo
-from setuptools import Command, Extension, setup
+from setuptools import Extension, setup
+from setuptools.command.build import build
 from setuptools.command.build_ext import build_ext
 from setuptools.dist import Distribution
 
@@ -54,17 +55,17 @@ def find_extensions(directory: Path) -> list[PrecompiledExtension]:
     return [PrecompiledExtension(path) for path in directory.glob("*")]
 
 
-class MSBuild(Command):
-    """Command to build server executables from GitHub repository."""
-
-    user_options = [
+class BuildWithServer(build):
+    user_options = build.user_options + [
         ("repo=", "R", "Server repository URL"),
-        ("ref=", "r", "Git version reference (commit ID, tag, etc.)")
+        ("ref=", "r", "Git version reference (commit ID, tag, etc.)"),
     ]
 
     def initialize_options(self) -> None:
         self.url: Optional[str] = None
         self.ref: Optional[str] = None
+
+        super().initialize_options()
 
     def finalize_options(self) -> None:
         pyproject_path = Path(__file__).parent.absolute() / "pyproject.toml"
@@ -75,7 +76,9 @@ class MSBuild(Command):
         if self.ref is None:
             self.ref = config["tool"]["vendor"]["reference"]
 
-    def run(self) -> None:
+        super().finalize_options()
+
+    def run(self):
         def onerror(func, path, ex_info):
             ex, *_ = ex_info
             # resolve any permission issues
@@ -95,12 +98,19 @@ class MSBuild(Command):
         repo = Repo.clone_from(self.url, server_path, no_checkout=True)
         repo.git.checkout(self.ref)
         code = subprocess.call(
-            ["dotnet", "msbuild", "/m", "/t:FullClean;Publish", "/Restore", "/p:\"UseCurrentRuntimeIdentifier=True\""],
-            cwd=server_path / "Vibrio"
+            [
+                "dotnet",
+                "msbuild",
+                "/m",
+                "/t:FullClean;Publish",
+                "/Restore",
+                '/p:"UseCurrentRuntimeIdentifier=True"',
+            ],
+            cwd=server_path / "Vibrio",
         )
         if code != 0:
             raise Exception("MSBuild exited with non-zero code")
-        
+
         publish_dir = server_path / "publish"
         for file in publish_dir.glob("*"):
             file.rename(VENDOR_DIR / file.name)
@@ -111,9 +121,11 @@ class MSBuild(Command):
                 zip_file.extractall(VENDOR_DIR)
             zip_path.unlink()
 
+        return super().run()
+
 
 setup(
     ext_modules=find_extensions(VENDOR_DIR),
-    cmdclass={"build_ext": BuildPrecompiledExtensions, "msbuild": MSBuild},
+    cmdclass={"build_ext": BuildPrecompiledExtensions, "build": BuildWithServer},
     distclass=PrecompiledDistribution,
 )
