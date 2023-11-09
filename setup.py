@@ -3,17 +3,17 @@ import shutil
 import stat
 import subprocess
 from pathlib import Path
-from typing import Generator, Optional
+from typing import Generator
 from zipfile import ZipFile
 
-import toml
-from git import Repo
 from setuptools import Command, Extension, setup
 from setuptools.command.build import build
 from setuptools.command.build_ext import build_ext
 from setuptools.dist import Distribution
 
-VENDOR_DIR = Path(__file__).parent.absolute() / "vibrio" / "lib"
+PACKAGE_DIR = Path(__file__).parent.absolute() / "vibrio"
+EXTENSION_DIR = PACKAGE_DIR / "lib"
+VENDOR_DIR = PACKAGE_DIR / "vendor"
 
 
 class PrecompiledDistribution(Distribution):
@@ -51,26 +51,14 @@ class BuildPrecompiledExtensions(build_ext):
                     shutil.copy(path, dest.parent)
 
 
-class VendorCommand(Command):
-    """Command to clone server repository and build executables."""
-
-    user_options = [
-        ("repo=", None, "Server repository URL"),
-        ("ref=", None, "Git version reference (commit ID, tag, etc.)"),
-    ]
+class BuildVendoredDependencies(Command):
+    """Command to build executables from vendored server library."""
 
     def initialize_options(self) -> None:
-        self.url: Optional[str] = None
-        self.ref: Optional[str] = None
+        pass
 
     def finalize_options(self) -> None:
-        pyproject_path = Path(__file__).parent.absolute() / "pyproject.toml"
-        with pyproject_path.open() as pyproject:
-            config = toml.load(pyproject)
-        if self.url is None:
-            self.url = config["tool"]["vendor"]["repository"]
-        if self.ref is None:
-            self.ref = config["tool"]["vendor"]["reference"]
+        pass
 
     def run(self):
         def onerror(func, path, ex_info):
@@ -84,13 +72,10 @@ class VendorCommand(Command):
             else:
                 raise
 
-        shutil.rmtree(VENDOR_DIR, onerror=onerror)
-        VENDOR_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.rmtree(EXTENSION_DIR, onerror=onerror)
+        EXTENSION_DIR.mkdir(parents=True, exist_ok=True)
 
-        assert self.url is not None
-        server_path = VENDOR_DIR / "server"
-        repo = Repo.clone_from(self.url, server_path, no_checkout=True)
-        repo.git.checkout(self.ref)
+        server_dir = VENDOR_DIR / "vibrio"
         code = subprocess.call(
             [
                 "dotnet",
@@ -100,28 +85,27 @@ class VendorCommand(Command):
                 "/Restore",
                 '/p:"UseCurrentRuntimeIdentifier=True"',
             ],
-            cwd=server_path / "Vibrio",
+            cwd=server_dir / "Vibrio",
         )
         if code != 0:
             raise Exception("MSBuild exited with non-zero code")
 
-        publish_dir = server_path / "publish"
+        publish_dir = server_dir / "publish"
         for path in publish_dir.glob("*.zip"):
             with ZipFile(path, "r") as zip_file:
-                zip_file.extractall(VENDOR_DIR)
-        shutil.rmtree(server_path, onerror=onerror)
+                zip_file.extractall(EXTENSION_DIR)
 
 
 class CustomBuild(build):
-    sub_commands = [("vendor", None)] + build.sub_commands
+    sub_commands = [("build_vendor", None)] + build.sub_commands
 
 
 setup(
-    ext_modules=[PrecompiledExtension(VENDOR_DIR)],
+    ext_modules=[PrecompiledExtension(EXTENSION_DIR)],
     cmdclass={
         "build_ext": BuildPrecompiledExtensions,
+        "build_vendor": BuildVendoredDependencies,
         "build": CustomBuild,
-        "vendor": VendorCommand,
     },
     distclass=PrecompiledDistribution,
 )
