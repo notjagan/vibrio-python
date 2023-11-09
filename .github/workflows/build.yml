@@ -21,17 +21,11 @@ jobs:
         uses: pypa/cibuildwheel@v2.16.2
         env:
           CIBW_BEFORE_ALL_LINUX: >
-            curl -O https://dot.net/v1/dotnet-install.sh &&
-            ls -lA &&
-            chmod +x ./dotnet-install.sh &&
-            ./dotnet-install.sh
+            source <(curl -s https://dot.net/v1/dotnet-install.sh)
           CIBW_BEFORE_ALL_MACOS: >
-            curl -O https://dot.net/v1/dotnet-install.sh &&
-            ls -lA &&
-            chmod +x ./dotnet-install.sh &&
-            ./dotnet-install.sh
+            source <(curl -s https://dot.net/v1/dotnet-install.sh)
           CIBW_BEFORE_ALL_WINDOWS: >
-            curl -O https://dot.net/v1/dotnet-install.sh &&
+            curl -O https://dot.net/v1/dotnet-install.ps1 &&
             ./dotnet-install.sh
           CIBW_BEFORE_BUILD: >
             pip install toml GitPython &&
