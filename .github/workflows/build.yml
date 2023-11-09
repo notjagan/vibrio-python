@@ -16,17 +16,17 @@ jobs:
         include:
           - vers: arm64
             os: ubuntu-20.04
-          - vers: x64
+          - vers: auto64
             os: ubuntu-20.04
           - vers: arm64
             os: macos-10.15
-          - vers: x64
+          - vers: auto64
             os: macos-10.15
           - vers: i686
             os: windows-2019
           - vers: arm64
             os: windows-2019
-          - vers: x64
+          - vers: auto64
             os: windows-2019
 
     steps:
