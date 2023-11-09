@@ -95,7 +95,7 @@ class MSBuild(Command):
         repo = Repo.clone_from(self.url, server_path, no_checkout=True)
         repo.git.checkout(self.ref)
         code = subprocess.call(
-            ["dotnet", "msbuild", "/m", "/t:FullClean;Publish", "/Restore"],
+            ["dotnet", "msbuild", "/m", "/t:FullClean;Publish", "/Restore", "/p:\"InvariantGlobalization=true\""],
             cwd=server_path / "Vibrio"
         )
         if code != 0:
