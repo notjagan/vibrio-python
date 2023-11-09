@@ -22,10 +22,12 @@ jobs:
         env:
           CIBW_BEFORE_ALL_LINUX: >
             curl -O https://dot.net/v1/dotnet-install.sh &&
+            ls -lA &&
             chmod +x ./dotnet-install.sh &&
             ./dotnet-install.sh
           CIBW_BEFORE_ALL_MACOS: >
             curl -O https://dot.net/v1/dotnet-install.sh &&
+            ls -lA &&
             chmod +x ./dotnet-install.sh &&
             ./dotnet-install.sh
           CIBW_BEFORE_ALL_WINDOWS: >
