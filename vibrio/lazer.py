@@ -44,7 +44,7 @@ def find_open_port() -> int:
         return sock.getsockname()[1]
 
 
-class Lazer:
+class LazerBase:
     def __init__(self, port: Optional[int] = None, use_logging: bool = True) -> None:
         if port is None:
             self.port = find_open_port()
@@ -56,14 +56,24 @@ class Lazer:
         if not self.server_path.exists():
             raise FileNotFoundError(f'No executable found at "{self.server_path}".')
         self.server_path.chmod(self.server_path.stat().st_mode | stat.S_IEXEC)
+
+    def address(self) -> str:
+        """Constructs the base URL for the API."""
+        return f"http://localhost:{self.port}"
+
+    def url(self, endpoint: str) -> str:
+        """Constructs API URL for a given endpoint."""
+        return f"{self.address()}/api/{endpoint}"
+
+
+class Lazer(LazerBase):
+    def __init__(self, port: Optional[int] = None, use_logging: bool = True) -> None:
+        super().__init__(port, use_logging)
+
         self.process: Optional[subprocess.Popen] = None
         self.log: Optional[_TemporaryFileWrapper[bytes]] = None
 
-    def address(self) -> str:
-        return f"http://localhost:{self.port}"
-
     def start(self) -> None:
-        """Spawns `vibrio` server executable as a subprocess."""
         if self.process is None:
             print(f"Launching server on port {self.port}")
 
@@ -92,7 +102,6 @@ class Lazer:
             raise ServerStateException("Server is already running")
 
     def stop(self) -> None:
-        """Kills server subprocess."""
         if self.process is not None:
             self.process.kill()
             self.process = None
@@ -108,10 +117,6 @@ class Lazer:
     def __exit__(self, *_) -> bool:
         self.stop()
         return False
-
-    def url(self, endpoint: str) -> str:
-        """Constructs API URL for a given endpoint."""
-        return f"{self.address()}/api/{endpoint}"
 
     def has_beatmap(self, beatmap_id: int) -> bool:
         """Checks if given beatmap is cached/available locally."""
