@@ -11,6 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        pyver: [cp39, cp310, cp311, cp312]
         include:
           - vers: arm64
             os: ubuntu-20.04
@@ -26,7 +27,6 @@ jobs:
             os: windows-2019
           - vers: x64
             os: windows-2019
-        pyver: [cp39, cp310, cp311, cp312]
 
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +39,9 @@ jobs:
         uses: pypa/cibuildwheel@v2.16.2
         env:
           CIBW_BUILD: ${{matrix.pyver}}-*
+          CIBW_ARCHS_LINUX: ${{ matrix.vers }}
+          CIBW_ARCHS_MACOS: ${{ matrix.vers }}
+          CIBW_ARCHS_WINDOWS: ${{ matrix.vers }}
           CIBW_BEFORE_ALL_LINUX: curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --version 6.0.416
           CIBW_ENVIRONMENT_LINUX: DOTNET_ROOT=$HOME/.dotnet PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
           CIBW_TEST_REQUIRES: pytest
