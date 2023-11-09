@@ -12,7 +12,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-11]
+        os: [ubuntu-20.04, macos-11]
 
     steps:
       - uses: actions/checkout@v4
@@ -20,16 +20,10 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.2
         env:
-          CIBW_BEFORE_ALL_LINUX: >
-            curl -sSOL https://dot.net/v1/dotnet-install.sh &&
-            . ./dotnet-install.sh --runtime dotnet --version 6.0.24
-          CIBW_BEFORE_ALL_MACOS: >
-            curl -sSOL https://dot.net/v1/dotnet-install.sh &&
-            . ./dotnet-install.sh --runtime dotnet --version 6.0.24
-          CIBW_BEFORE_ALL_WINDOWS: >
-            Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile 'dotnet-install.ps1' &&
-            ./dotnet-install.ps1 -InstallDir '~/.dotnet' -Version '6.0.24' -Runtime 'dotnet'
+          CIBW_BEFORE_ALL: curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --runtime dotnet --version 6.0.24
           CIBW_BEFORE_BUILD: >
+            export DOTNET_ROOT=$HOME/.dotnet &&
+            export PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools
             pip install toml GitPython &&
             python setup.py msbuild
           CIBW_TEST_REQUIRES: pytest
