@@ -43,22 +43,18 @@ class BuildPrecompiledExtensions(build_ext):
         """Directly copies relevant executable extension(s)."""
         for ext in self.extensions:
             if isinstance(ext, PrecompiledExtension):
-                dest = Path(self.build_lib) / ext.path.relative_to(
-                    Path(__file__).parent.absolute()
-                )
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy(ext.path, dest.parent)
-
-
-def find_extensions(directory: Path) -> list[PrecompiledExtension]:
-    """Creates extension modules from all files in a directory."""
-    return [PrecompiledExtension(path) for path in directory.glob("*")]
+                for path in ext.path.glob("*"):
+                    dest = Path(self.build_lib) / path.relative_to(
+                        Path(__file__).parent.absolute()
+                    )
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(path, dest.parent)
 
 
 class BuildWithServer(build):
     user_options = build.user_options + [
-        ("repo=", "R", "Server repository URL"),
-        ("ref=", "r", "Git version reference (commit ID, tag, etc.)"),
+        ("repo=", None, "Server repository URL"),
+        ("ref=", None, "Git version reference (commit ID, tag, etc.)"),
     ]
 
     def initialize_options(self) -> None:
@@ -125,7 +121,7 @@ class BuildWithServer(build):
 
 
 setup(
-    ext_modules=find_extensions(VENDOR_DIR),
+    ext_modules=[PrecompiledExtension(VENDOR_DIR)],
     cmdclass={"build_ext": BuildPrecompiledExtensions, "build": BuildWithServer},
     distclass=PrecompiledDistribution,
 )
