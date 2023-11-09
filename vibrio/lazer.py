@@ -12,6 +12,8 @@ from typing import BinaryIO, Optional
 import requests
 from typing_extensions import Self
 
+PACKAGE_DIR = Path(__file__).absolute().parent
+
 
 class ServerStateException(Exception):
     """Exception due to attempting to induce an invalid server state transition."""
@@ -32,18 +34,28 @@ def get_vibrio_path(platform: str) -> Path:
     else:
         suffix = ""
 
-    return Path(__file__).parent.absolute() / "lib" / f"Vibrio{suffix}"
+    return PACKAGE_DIR / "lib" / f"Vibrio{suffix}"
 
 
-class Server:
-    def __init__(self, port: int, use_logging: bool = True) -> None:
-        self.port = port
+def find_open_port() -> int:
+    """Returns a port not currently in use on the system."""
+    with socket.socket() as sock:
+        sock.bind(("", 0))
+        return sock.getsockname()[1]
+
+
+class Lazer:
+    def __init__(self, port: Optional[int] = None, use_logging: bool = True) -> None:
+        if port is None:
+            self.port = find_open_port()
+        else:
+            self.port = port
         self.use_logging = use_logging
 
-        self.vibrio_path = get_vibrio_path(platform.system())
-        if not self.vibrio_path.exists():
-            raise FileNotFoundError(f'No executable found at "{self.vibrio_path}".')
-        self.vibrio_path.chmod(self.vibrio_path.stat().st_mode | stat.S_IEXEC)
+        self.server_path = get_vibrio_path(platform.system())
+        if not self.server_path.exists():
+            raise FileNotFoundError(f'No executable found at "{self.server_path}".')
+        self.server_path.chmod(self.server_path.stat().st_mode | stat.S_IEXEC)
         self.process: Optional[subprocess.Popen] = None
         self.log: Optional[_TemporaryFileWrapper[bytes]] = None
 
@@ -58,7 +70,7 @@ class Server:
             if self.use_logging:
                 self.log = TemporaryFile(delete=False)
                 self.process = subprocess.Popen(
-                    [self.vibrio_path, "--urls", self.address()],
+                    [self.server_path, "--urls", self.address()],
                     stdout=self.log,
                     stderr=self.log,
                 )
@@ -67,7 +79,7 @@ class Server:
                     time.sleep(0.5)
             else:
                 self.process = subprocess.Popen(
-                    [self.vibrio_path, "--urls", self.address()],
+                    [self.server_path, "--urls", self.address()],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                 )
@@ -89,24 +101,6 @@ class Server:
                 self.log.close()
                 self.log = None
 
-
-def find_open_port() -> int:
-    """Returns a port not currently in use on the system."""
-    with socket.socket() as sock:
-        sock.bind(("", 0))
-        return sock.getsockname()[1]
-
-
-class Lazer:
-    def __init__(self) -> None:
-        self.server = Server(find_open_port())
-
-    def start(self) -> None:
-        self.server.start()
-
-    def stop(self) -> None:
-        self.server.stop()
-
     def __enter__(self) -> Self:
         self.start()
         return self
@@ -117,7 +111,7 @@ class Lazer:
 
     def url(self, endpoint: str) -> str:
         """Constructs API URL for a given endpoint."""
-        return f"{self.server.address()}/api/{endpoint}"
+        return f"{self.address()}/api/{endpoint}"
 
     def has_beatmap(self, beatmap_id: int) -> bool:
         """Checks if given beatmap is cached/available locally."""

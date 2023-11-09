@@ -11,7 +11,8 @@ from setuptools.command.build import build
 from setuptools.command.build_ext import build_ext
 from setuptools.dist import Distribution
 
-PACKAGE_DIR = Path(__file__).parent.absolute() / "vibrio"
+PROJECT_DIR = Path(__file__).absolute().parent
+PACKAGE_DIR = PROJECT_DIR / "vibrio"
 EXTENSION_DIR = PACKAGE_DIR / "lib"
 VENDOR_DIR = PACKAGE_DIR / "vendor"
 
