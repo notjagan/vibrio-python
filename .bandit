@@ -1,0 +1,3 @@
+# dotnet is assumed to be correctly installed on path
+[bandit]
+skips = B607

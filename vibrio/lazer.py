@@ -2,16 +2,13 @@ import atexit
 import io
 import platform
 import socket
+import stat
 import subprocess
 from pathlib import Path
 from typing import BinaryIO, Optional
 
 import requests
 from typing_extensions import Self
-
-
-class UnsupportedPlatformError(ValueError):
-    """Error caused by attempting to execute on an unsupported platform/architecture."""
 
 
 class ServerStateException(Exception):
@@ -26,38 +23,23 @@ class BeatmapNotFound(FileNotFoundError):
     """Exception caused by missing/unknown beatmap."""
 
 
-def get_vibrio_path(plat: str, arch: str) -> Path:
-    """Determines path to server executable on a given platform and architecture."""
-    suffix = ""
-    if plat == "Windows":
-        if arch == "x86_64" or arch == "AMD64":
-            suffix = "win-x64.exe"
-        elif arch == "i386":
-            suffix = "win-x86.exe"
-    elif plat == "Linux":
-        if arch == "x86_64":
-            suffix = "linux-x64"
-        elif arch == "arm64":
-            suffix = "linux-arm64"
-    elif plat == "Darwin":
-        if arch == "x86_64":
-            suffix = "osx-x64"
-        elif arch == "arm64":
-            suffix = "osx-arm64"
+def get_vibrio_path(platform: str) -> Path:
+    """Determines path to server executable on a given platform."""
+    if platform == "Windows":
+        suffix = ".exe"
     else:
-        raise UnsupportedPlatformError(
-            f'Platform "{plat}" with architecture "{arch}" is not supported'
-        )
+        suffix = ""
 
-    return Path(__file__).parent.absolute() / "lib" / f"vibrio.{suffix}"
+    return Path(__file__).parent.absolute() / "lib" / f"Vibrio{suffix}"
 
 
 class Server:
     def __init__(self, port: int) -> None:
         self.port = port
-        self.vibrio_path = get_vibrio_path(platform.system(), platform.machine())
+        self.vibrio_path = get_vibrio_path(platform.system())
         if not self.vibrio_path.exists():
             raise FileNotFoundError(f'No executable found at "{self.vibrio_path}".')
+        self.vibrio_path.chmod(self.vibrio_path.stat().st_mode | stat.S_IEXEC)
         self.process: Optional[subprocess.Popen] = None
 
     def address(self) -> str:
@@ -68,8 +50,11 @@ class Server:
         if self.process is None:
             self.process = subprocess.Popen(
                 [self.vibrio_path, "--urls", self.address()],
-                stdout=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
             )
+            assert self.process.stdout is not None
+            # block until webserver launches
+            self.process.stdout.readline()
             atexit.register(self.stop)
         else:
             raise ServerStateException("Server is already running")

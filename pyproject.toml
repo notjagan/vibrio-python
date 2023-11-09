@@ -4,12 +4,22 @@ version = "0.1.0"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
+dependencies = [
+    "requests",
+    "typing_extensions"
+]
 
 [build-system]
-requires = ["setuptools ~= 57.0", "requests ~= 2.31", "toml ~= 0.10"]
+build-backend = "setuptools.build_meta"
+requires = [
+    "setuptools>=68.2",
+    "GitPython",
+    "toml"
+]
 
 [tool.setuptools]
 packages = ["vibrio"]
 
 [tool.vendor]
-release = "v0.1.0-alpha"
+repository = "https://github.com/notjagan/vibrio.git"
+reference = "v0.1.0-alpha"

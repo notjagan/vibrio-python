@@ -1,11 +1,15 @@
+import os
 import shutil
+import stat
+import subprocess
 from pathlib import Path
 from typing import Generator, Optional
 from zipfile import ZipFile
 
-import requests
 import toml
-from setuptools import Command, Extension, setup
+from git import Repo
+from setuptools import Extension, setup
+from setuptools.command.build import build
 from setuptools.command.build_ext import build_ext
 from setuptools.dist import Distribution
 
@@ -32,82 +36,92 @@ class PrecompiledExtension(Extension):
         super().__init__(self.path.name, [])
 
 
-class UnsupportedPlatformError(ValueError):
-    """Error caused by attempting to build on an unsupported platform/architecture."""
-
-
 class BuildPrecompiledExtensions(build_ext):
     """Describes the build process for a package with only precompiled extensions."""
-
-    def suffix(self) -> str:
-        """Determines executable file suffix for the current build platform."""
-        if self.plat_name == "win-amd64":
-            return ".win-x64.exe"
-        elif self.plat_name == "win32":
-            return ".win-x86.exe"
-        elif self.plat_name.startswith("macosx"):
-            if self.plat_name.endswith("x86_64"):
-                return ".osx-x64"
-            elif self.plat_name.endswith("arm64"):
-                return ".osx-arm64"
-        elif self.plat_name == "manylinux1_x86_64":
-            return ".linux-x64"
-        elif self.plat_name == "manylinux1_arm64":
-            return ".linux-arm64"
-        raise UnsupportedPlatformError(f'Platform "{self.plat_name}" is not supported')
 
     def run(self):
         """Directly copies relevant executable extension(s)."""
         for ext in self.extensions:
-            if isinstance(ext, PrecompiledExtension) and ext.path.name.endswith(
-                self.suffix()
-            ):
-                dest = Path(self.build_lib) / ext.path.parent
-                dest.mkdir(parents=True, exist_ok=True)
-                shutil.copy(ext.path, dest)
+            if isinstance(ext, PrecompiledExtension):
+                for path in ext.path.glob("*"):
+                    dest = Path(self.build_lib) / path.relative_to(
+                        Path(__file__).parent.absolute()
+                    )
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(path, dest.parent)
 
 
-def find_extensions(directory: Path) -> list[PrecompiledExtension]:
-    """Creates extension modules from all files in a directory."""
-    return [PrecompiledExtension(path) for path in directory.glob("*")]
-
-
-class VendorBinaries(Command):
-    """Command to download server executables from GitHub release."""
-
-    user_options = [("tag=", "t", "Tag associated with release version of server")]
+class BuildWithServer(build):
+    user_options = build.user_options + [
+        ("repo=", None, "Server repository URL"),
+        ("ref=", None, "Git version reference (commit ID, tag, etc.)"),
+    ]
 
     def initialize_options(self) -> None:
-        self.tag: Optional[str] = None
+        self.url: Optional[str] = None
+        self.ref: Optional[str] = None
+
+        super().initialize_options()
 
     def finalize_options(self) -> None:
-        with open(Path(__file__).parent.absolute() / "pyproject.toml") as file:
-            config = toml.load(file)
-        if self.tag is None:
-            self.tag = config["tool"]["vendor"]["release"]
+        pyproject_path = Path(__file__).parent.absolute() / "pyproject.toml"
+        with pyproject_path.open() as pyproject:
+            config = toml.load(pyproject)
+        if self.url is None:
+            self.url = config["tool"]["vendor"]["repository"]
+        if self.ref is None:
+            self.ref = config["tool"]["vendor"]["reference"]
 
-    def run(self) -> None:
-        shutil.rmtree(VENDOR_DIR, ignore_errors=True)
+        super().finalize_options()
+
+    def run(self):
+        def onerror(func, path, ex_info):
+            ex, *_ = ex_info
+            # resolve any permission issues
+            if ex is PermissionError and not os.access(path, os.W_OK):
+                os.chmod(path, stat.S_IWUSR)
+                func(path)
+            elif ex is FileNotFoundError:
+                pass
+            else:
+                raise
+
+        shutil.rmtree(VENDOR_DIR, onerror=onerror)
         VENDOR_DIR.mkdir(parents=True, exist_ok=True)
 
-        response = requests.get(
-            f"https://api.github.com/repos/notjagan/vibrio/releases/tags/{self.tag}"
+        assert self.url is not None
+        server_path = VENDOR_DIR / "server"
+        repo = Repo.clone_from(self.url, server_path, no_checkout=True)
+        repo.git.checkout(self.ref)
+        code = subprocess.call(
+            [
+                "dotnet",
+                "msbuild",
+                "/m",
+                "/t:FullClean;Publish",
+                "/Restore",
+                '/p:"UseCurrentRuntimeIdentifier=True"',
+            ],
+            cwd=server_path / "Vibrio",
         )
-        release = response.json()
+        if code != 0:
+            raise Exception("MSBuild exited with non-zero code")
 
-        for asset in release["assets"]:
-            name: str = asset["name"]
-            zip_path = (VENDOR_DIR / name).with_suffix(".zip")
-            with open(zip_path, "wb") as file:
-                file.write(requests.get(asset["browser_download_url"]).content)
+        publish_dir = server_path / "publish"
+        for file in publish_dir.glob("*"):
+            file.rename(VENDOR_DIR / file.name)
+        shutil.rmtree(server_path, onerror=onerror)
 
-            with ZipFile(zip_path, "r") as zipfile:
-                zipfile.extractall(VENDOR_DIR)
+        for zip_path in VENDOR_DIR.glob("*.zip"):
+            with ZipFile(zip_path, "r") as zip_file:
+                zip_file.extractall(VENDOR_DIR)
             zip_path.unlink()
+
+        return super().run()
 
 
 setup(
-    ext_modules=find_extensions(VENDOR_DIR),
-    cmdclass={"build_ext": BuildPrecompiledExtensions, "vendor": VendorBinaries},
+    ext_modules=[PrecompiledExtension(VENDOR_DIR)],
+    cmdclass={"build_ext": BuildPrecompiledExtensions, "build": BuildWithServer},
     distclass=PrecompiledDistribution,
 )
