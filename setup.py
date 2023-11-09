@@ -94,7 +94,12 @@ class MSBuild(Command):
         server_path = VENDOR_DIR / "server"
         repo = Repo.clone_from(self.url, server_path, no_checkout=True)
         repo.git.checkout(self.ref)
-        subprocess.call(["dotnet", "msbuild", "/m", "/t:FullClean;Publish", "/Restore"], cwd=server_path / "Vibrio")
+        code = subprocess.call(
+            ["dotnet", "msbuild", "/m", "/t:FullClean;Publish", "/Restore"],
+            cwd=server_path / "Vibrio"
+        )
+        if code != 0:
+            raise Exception("MSBuild exited with non-zero code")
         
         publish_dir = server_path / "publish"
         for file in publish_dir.glob("*"):
