@@ -8,7 +8,7 @@ from zipfile import ZipFile
 
 import toml
 from git import Repo
-from setuptools import Extension, setup
+from setuptools import Command, Extension, setup
 from setuptools.command.build import build
 from setuptools.command.build_ext import build_ext
 from setuptools.dist import Distribution
@@ -37,7 +37,7 @@ class PrecompiledExtension(Extension):
 
 
 class BuildPrecompiledExtensions(build_ext):
-    """Describes the build process for a package with only precompiled extensions."""
+    """Command to copy executables for precompiled extensions."""
 
     def run(self):
         """Directly copies relevant executable extension(s)."""
@@ -51,8 +51,10 @@ class BuildPrecompiledExtensions(build_ext):
                     shutil.copy(path, dest.parent)
 
 
-class BuildWithServer(build):
-    user_options = build.user_options + [
+class VendorCommand(Command):
+    """Command to clone server repository and build executables."""
+
+    user_options = [
         ("repo=", None, "Server repository URL"),
         ("ref=", None, "Git version reference (commit ID, tag, etc.)"),
     ]
@@ -60,8 +62,6 @@ class BuildWithServer(build):
     def initialize_options(self) -> None:
         self.url: Optional[str] = None
         self.ref: Optional[str] = None
-
-        super().initialize_options()
 
     def finalize_options(self) -> None:
         pyproject_path = Path(__file__).parent.absolute() / "pyproject.toml"
@@ -71,8 +71,6 @@ class BuildWithServer(build):
             self.url = config["tool"]["vendor"]["repository"]
         if self.ref is None:
             self.ref = config["tool"]["vendor"]["reference"]
-
-        super().finalize_options()
 
     def run(self):
         def onerror(func, path, ex_info):
@@ -117,11 +115,16 @@ class BuildWithServer(build):
                 zip_file.extractall(VENDOR_DIR)
             zip_path.unlink()
 
-        return super().run()
+class CustomBuild(build):
+    sub_commands = [("vendor", None)] + build.sub_commands
 
 
 setup(
     ext_modules=[PrecompiledExtension(VENDOR_DIR)],
-    cmdclass={"build_ext": BuildPrecompiledExtensions, "build": BuildWithServer},
+    cmdclass={
+        "build_ext": BuildPrecompiledExtensions,
+        "build": CustomBuild,
+        "vendor": VendorCommand,
+    },
     distclass=PrecompiledDistribution,
 )
