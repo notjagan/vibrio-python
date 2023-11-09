@@ -14,19 +14,17 @@ jobs:
       matrix:
         pyver: [cp39, cp310, cp311, cp312]
         platform:
-          - arch: arm64
-            os: ubuntu-20.04
-          - arch: auto64
+          - arch: x86_64
             os: ubuntu-20.04
           - arch: arm64
             os: macos-10.15
-          - arch: auto64
+          - arch: x86_64
             os: macos-10.15
           - arch: i686
             os: windows-2019
           - arch: arm64
             os: windows-2019
-          - arch: auto64
+          - arch: x86_64
             os: windows-2019
 
     steps:
