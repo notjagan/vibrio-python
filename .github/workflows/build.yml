@@ -17,14 +17,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET framework
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '6.0.x'
-
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.2
         env:
+          CIBW_BEFORE_ALL: >
+            curl -sO https://dot.net/v1/dotnet-install.sh &&
+            ./dotnet-install.sh
           CIBW_BEFORE_BUILD: >
             pip install toml GitPython &&
             python setup.py msbuild
