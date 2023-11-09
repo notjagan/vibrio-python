@@ -22,4 +22,4 @@ packages = ["vibrio"]
 
 [tool.vendor]
 repository = "https://github.com/notjagan/vibrio.git"
-reference = "v0.1.0-alpha"
+reference = "invariant-globalization"
