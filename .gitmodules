@@ -1,0 +1,3 @@
+[submodule "vibrio/vendor/vibrio"]
+	path = vibrio/vendor/vibrio
+	url = git@github.com:notjagan/vibrio.git
