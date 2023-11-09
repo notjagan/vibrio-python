@@ -106,14 +106,11 @@ class VendorCommand(Command):
             raise Exception("MSBuild exited with non-zero code")
 
         publish_dir = server_path / "publish"
-        for file in publish_dir.glob("*"):
-            file.rename(VENDOR_DIR / file.name)
+        for path in publish_dir.glob("*.zip"):
+            with ZipFile(path, "r") as zip_file:
+                zip_file.extractall(VENDOR_DIR)
         shutil.rmtree(server_path, onerror=onerror)
 
-        for zip_path in VENDOR_DIR.glob("*.zip"):
-            with ZipFile(zip_path, "r") as zip_file:
-                zip_file.extractall(VENDOR_DIR)
-            zip_path.unlink()
 
 class CustomBuild(build):
     sub_commands = [("vendor", None)] + build.sub_commands
