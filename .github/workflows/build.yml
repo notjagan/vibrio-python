@@ -8,11 +8,25 @@ on:
 
 jobs:
   build_wheels:
-    name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-11]
+        include:
+          - vers: arm64
+            os: ubuntu-20.04
+          - vers: x64
+            os: ubuntu-20.04
+          - vers: arm64
+            os: macos-10.15
+          - vers: x64
+            os: macos-10.15
+          - vers: i686
+            os: windows-2019
+          - vers: arm64
+            os: windows-2019
+          - vers: x64
+            os: windows-2019
+        pyver: [cp39, cp310, cp311, cp312]
 
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +38,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.2
         env:
+          CIBW_BUILD: ${{matrix.pyver}}-*
           CIBW_BEFORE_ALL_LINUX: curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --version 6.0.416
           CIBW_ENVIRONMENT_LINUX: DOTNET_ROOT=$HOME/.dotnet PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
           CIBW_TEST_REQUIRES: pytest
