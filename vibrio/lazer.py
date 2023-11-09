@@ -4,7 +4,9 @@ import platform
 import socket
 import stat
 import subprocess
+import time
 from pathlib import Path
+from tempfile import TemporaryFile, _TemporaryFileWrapper
 from typing import BinaryIO, Optional
 
 import requests
@@ -34,13 +36,16 @@ def get_vibrio_path(platform: str) -> Path:
 
 
 class Server:
-    def __init__(self, port: int) -> None:
+    def __init__(self, port: int, use_logging: bool = True) -> None:
         self.port = port
+        self.use_logging = use_logging
+
         self.vibrio_path = get_vibrio_path(platform.system())
         if not self.vibrio_path.exists():
             raise FileNotFoundError(f'No executable found at "{self.vibrio_path}".')
         self.vibrio_path.chmod(self.vibrio_path.stat().st_mode | stat.S_IEXEC)
         self.process: Optional[subprocess.Popen] = None
+        self.log: Optional[_TemporaryFileWrapper[bytes]] = None
 
     def address(self) -> str:
         return f"http://localhost:{self.port}"
@@ -48,13 +53,28 @@ class Server:
     def start(self) -> None:
         """Spawns `vibrio` server executable as a subprocess."""
         if self.process is None:
-            self.process = subprocess.Popen(
-                [self.vibrio_path, "--urls", self.address()],
-                stdout=subprocess.PIPE,
-            )
-            assert self.process.stdout is not None
-            # block until webserver launches
-            self.process.stdout.readline()
+            print(f"Launching server on port {self.port}")
+
+            if self.use_logging:
+                self.log = TemporaryFile(delete=False)
+                self.process = subprocess.Popen(
+                    [self.vibrio_path, "--urls", self.address()],
+                    stdout=self.log,
+                    stderr=self.log,
+                )
+                # block until first output
+                while self.log.tell() == 0:
+                    time.sleep(0.5)
+            else:
+                self.process = subprocess.Popen(
+                    [self.vibrio_path, "--urls", self.address()],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+                assert self.process.stdout is not None
+                # block until first output
+                self.process.stdout.readline()
+
             atexit.register(self.stop)
         else:
             raise ServerStateException("Server is already running")
@@ -64,6 +84,10 @@ class Server:
         if self.process is not None:
             self.process.kill()
             self.process = None
+            if self.log is not None:
+                print(f"Server output logged at {self.log.file.name}")
+                self.log.close()
+                self.log = None
 
 
 def find_open_port() -> int:
