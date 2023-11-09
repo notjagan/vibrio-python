@@ -20,11 +20,9 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.2
         env:
-          CIBW_BEFORE_ALL_LINUX: curl -s https://dot.net/v1/dotnet-install.sh | bash -s
-          CIBW_BEFORE_ALL_MACOS: curl -s https://dot.net/v1/dotnet-install.sh | bash -s
-          CIBW_BEFORE_ALL_WINDOWS: >
-            curl -O https://dot.net/v1/dotnet-install.ps1 &&
-            ./dotnet-install.sh
+          CIBW_BEFORE_ALL_LINUX: curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --runtime dotnet --version 6.0.0
+          CIBW_BEFORE_ALL_MACOS: curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --runtime dotnet --version 6.0.0
+          CIBW_BEFORE_ALL_WINDOWS: &powershell -NoProfile -ExecutionPolicy unrestricted -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; &([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing 'https://dot.net/v1/dotnet-install.ps1'))) -Runtime dotnet -Version 6.0.0"
           CIBW_BEFORE_BUILD: >
             pip install toml GitPython &&
             python setup.py msbuild
