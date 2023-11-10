@@ -1,1 +1,1 @@
-from vibrio.lazer import Lazer
+from vibrio.lazer import Lazer, LazerAsync

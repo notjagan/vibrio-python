@@ -6,7 +6,8 @@ requires-python = ">=3.9"
 license = { file = "LICENSE" }
 dependencies = [
     "requests",
-    "typing_extensions"
+    "typing_extensions",
+    "aiohttp",
 ]
 
 [build-system]
