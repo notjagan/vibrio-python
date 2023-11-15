@@ -7,7 +7,8 @@ license = { file = "LICENSE" }
 dependencies = [
     "requests",
     "typing_extensions",
-    "aiohttp",
+    'aiohttp; python_version < "3.12"',
+    'aiohttp==3.9.0b1; python_version >= "3.12"',
     "psutil",
 ]
 
