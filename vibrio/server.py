@@ -179,7 +179,7 @@ class ServerAsync(ServerBase):
         for child in parent.children(recursive=True):
             child.terminate()
         parent.terminate()
-        await self.process.wait()
+        status = await self.process.wait()
 
         await self.session.close()
 
@@ -187,3 +187,6 @@ class ServerAsync(ServerBase):
             print(f"Server output logged at {self.log.file.name}")
             self.log.close()
             self.log = None
+
+        if status == 1:
+            raise SystemError("Could not cleanly shutdown server subprocess")
