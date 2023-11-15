@@ -6,7 +6,7 @@ pytest_plugins = ("pytest_asyncio",)
 
 
 @pytest.mark.parametrize("beatmap_id", [1001682])
-def test_get_beatmap(beatmap_id):
+def test_get_beatmap(beatmap_id: int):
     beatmap = None
     with Lazer() as lazer:
         beatmap = lazer.get_beatmap(beatmap_id)
@@ -21,7 +21,7 @@ def test_get_beatmap(beatmap_id):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("beatmap_id", [1001682])
-async def test_get_beatmap_async(beatmap_id):
+async def test_get_beatmap_async(beatmap_id: int):
     beatmap = None
     async with LazerAsync() as lazer:
         beatmap = await lazer.get_beatmap(beatmap_id)

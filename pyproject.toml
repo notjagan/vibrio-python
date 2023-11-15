@@ -8,6 +8,7 @@ dependencies = [
     "requests",
     "typing_extensions",
     "aiohttp",
+    "psutil",
 ]
 
 [build-system]

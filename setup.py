@@ -3,7 +3,7 @@ import shutil
 import stat
 import subprocess
 from pathlib import Path
-from typing import Generator
+from typing import Any, Callable, Generator
 from zipfile import ZipFile
 
 from setuptools import Command, Extension, setup
@@ -55,6 +55,8 @@ class BuildPrecompiledExtensions(build_ext):
 class BuildVendoredDependencies(Command):
     """Command to build executables from vendored server library."""
 
+    user_options = []
+
     def initialize_options(self) -> None:
         pass
 
@@ -62,7 +64,9 @@ class BuildVendoredDependencies(Command):
         pass
 
     def run(self):
-        def onerror(func, path, ex_info):
+        def onerror(
+            func: Callable[..., Any], path: str, ex_info: tuple[Exception, ...]
+        ):
             ex, *_ = ex_info
             # resolve any permission issues
             if ex is PermissionError and not os.access(path, os.W_OK):
