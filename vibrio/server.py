@@ -1,5 +1,4 @@
 import asyncio
-import functools
 import platform
 import stat
 import subprocess
@@ -12,6 +11,7 @@ from typing import Any
 import aiohttp
 import psutil
 import requests
+from requests.models import Response
 from typing_extensions import Self
 
 PACKAGE_DIR = Path(__file__).absolute().parent
@@ -43,12 +43,19 @@ class ServerBase(ABC):
         self.server_path.chmod(self.server_path.stat().st_mode | stat.S_IEXEC)
 
     def address(self) -> str:
-        """Constructs the base URL for the API."""
+        """Constructs the base URL for the web server."""
         return f"http://localhost:{self.port}"
 
-    def url(self, endpoint: str) -> str:
-        """Constructs API URL for a given endpoint."""
-        return f"{self.address()}/api/{endpoint}"
+
+class BaseUrlSession(requests.Session):
+    def __init__(self, base_url: str) -> None:
+        super().__init__()
+        self.base_url = base_url
+
+    def request(
+        self, method: str | bytes, url: str | bytes, *args: Any, **kwargs: Any
+    ) -> Response:
+        return super().request(method, f"{self.base_url}{url}", *args, **kwargs)
 
 
 class Server(ServerBase):
@@ -58,21 +65,10 @@ class Server(ServerBase):
     WARNING: intended for internal use only. Does not guarantee variables are instantiated before use.
     """
 
-    def __init__(self, port: int, use_logging: bool, session: requests.Session) -> None:
+    def __init__(self, port: int, use_logging: bool) -> None:
         super().__init__(port, use_logging)
-        self.session = session
+        self.session: requests.Session
         self.process: subprocess.Popen[bytes]
-
-        @functools.wraps(self.session.get)
-        def get(endpoint: str, *args: Any, **kwargs: Any) -> requests.Response:
-            return self.session.get(self.url(endpoint), *args, **kwargs)
-
-        @functools.wraps(self.session.post)
-        def post(endpoint: str, *args: Any, **kwargs: Any) -> requests.Response:
-            return self.session.post(self.url(endpoint), *args, **kwargs)
-
-        self.get = get
-        self.post = post
 
     def start(self) -> None:
         """Spawns server executable as a subprocess."""
@@ -97,10 +93,12 @@ class Server(ServerBase):
             # block until first output
             self.process.stdout.readline()
 
+        self.session = BaseUrlSession(self.address())
+
     @classmethod
     def create(cls, port: int, use_logging: bool) -> Self:
         """Generates instance of server class and launches executable."""
-        server = cls(port, use_logging, requests.Session())
+        server = cls(port, use_logging)
         server.start()
         return server
 
@@ -121,27 +119,10 @@ class ServerAsync(ServerBase):
     WARNING: intended for internal use only. Does not guarantee variables are instantiated before use.
     """
 
-    def __init__(
-        self, port: int, use_logging: bool, session: aiohttp.ClientSession
-    ) -> None:
+    def __init__(self, port: int, use_logging: bool) -> None:
         super().__init__(port, use_logging)
-        self.session = session
+        self.session: aiohttp.ClientSession
         self.process: asyncio.subprocess.Process
-
-        @functools.wraps(self.session.get)
-        def get(
-            endpoint: str, *args: Any, **kwargs: Any
-        ) -> aiohttp.client._RequestContextManager:
-            return self.session.get(self.url(endpoint), *args, **kwargs)
-
-        @functools.wraps(self.session.post)
-        def post(
-            endpoint: str, *args: Any, **kwargs: Any
-        ) -> aiohttp.client._RequestContextManager:
-            return self.session.post(self.url(endpoint), *args, **kwargs)
-
-        self.get = get
-        self.post = post
 
     async def start(self) -> None:
         """Spawns server executable as a subprocess."""
@@ -166,10 +147,12 @@ class ServerAsync(ServerBase):
             # block until first output
             await self.process.stdout.readline()
 
+        self.session = aiohttp.ClientSession(self.address())
+
     @classmethod
     async def create(cls, port: int, use_logging: bool) -> Self:
         """Generates instance of server class and launches executable."""
-        server = cls(port, use_logging, aiohttp.ClientSession())
+        server = cls(port, use_logging)
         await server.start()
         return server
 
