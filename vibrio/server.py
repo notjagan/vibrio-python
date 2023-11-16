@@ -125,7 +125,7 @@ class Server(ServerBase):
             self.log.close()
             self.log = None
 
-        if status != signal.SIGTERM:
+        if status != 0 and status != signal.SIGTERM:
             raise SystemError(
                 f"Could not cleanly shutdown server subprocess; received return code {status}"
             )
@@ -193,7 +193,7 @@ class ServerAsync(ServerBase):
             self.log.close()
             self.log = None
 
-        if status != signal.SIGTERM:
+        if status != 0 and status != signal.SIGTERM:
             raise SystemError(
                 f"Could not cleanly shutdown server subprocess; received return code {status}"
             )
