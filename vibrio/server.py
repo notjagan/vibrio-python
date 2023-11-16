@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import platform
+import signal
 import stat
 import subprocess
 import tempfile
 import time
+import urllib.parse
 from abc import ABC
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import aiohttp
 import psutil
@@ -34,6 +36,7 @@ class ServerBase(ABC):
 
     def __init__(self, port: int, use_logging: bool) -> None:
         self.port = port
+        self.log: Optional[tempfile._TemporaryFileWrapper[bytes]]
         if use_logging:
             self.log = tempfile.NamedTemporaryFile(delete=False)
         else:
@@ -57,7 +60,8 @@ class BaseUrlSession(requests.Session):
     def request(
         self, method: str | bytes, url: str | bytes, *args: Any, **kwargs: Any
     ) -> Response:
-        return super().request(method, f"{self.base_url}{url}", *args, **kwargs)
+        full_url = urllib.parse.urljoin(self.base_url, str(url))
+        return super().request(method, full_url, *args, **kwargs)
 
 
 class Server(ServerBase):
@@ -77,25 +81,24 @@ class Server(ServerBase):
         print(f"Launching server on port {self.port}")
 
         if self.log is not None:
-            self.process = subprocess.Popen(
-                [self.server_path, "--urls", self.address()],
-                stdout=self.log,
-                stderr=self.log,
-            )
-            # block until first output
-            while self.log.tell() == 0:
-                time.sleep(0.1)
+            out = self.log
         else:
-            self.process = subprocess.Popen(
-                [self.server_path, "--urls", self.address()],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-            )
-            assert self.process.stdout is not None
-            # block until first output
-            self.process.stdout.readline()
+            out = subprocess.DEVNULL
+
+        self.process = subprocess.Popen(
+            [self.server_path, "--urls", self.address()],
+            stdout=out,
+            stderr=out,
+        )
 
         self.session = BaseUrlSession(self.address())
+
+        # block until webserver has launched
+        while True:
+            with self.session.get("/api/status") as response:
+                if response.status_code == 200:
+                    break
+                time.sleep(0.05)
 
     @classmethod
     def create(cls, port: int, use_logging: bool) -> Self:
@@ -106,12 +109,20 @@ class Server(ServerBase):
 
     def stop(self) -> None:
         """Cleans up server subprocess."""
-        self.process.kill()
+        parent = psutil.Process(self.process.pid)
+        for child in parent.children(recursive=True):
+            child.terminate()
+        parent.terminate()
+        status = self.process.wait()
+
         self.session.close()
         if self.log is not None:
             print(f"Server output logged at {self.log.file.name}")
             self.log.close()
             self.log = None
+
+        if status != signal.SIGTERM:
+            raise SystemError("Could not cleanly shutdown server subprocess")
 
 
 class ServerAsync(ServerBase):
@@ -131,25 +142,24 @@ class ServerAsync(ServerBase):
         print(f"Launching server on port {self.port}")
 
         if self.log is not None:
-            self.process = await asyncio.create_subprocess_shell(
-                f"{self.server_path} --urls {self.address()}",
-                stdout=self.log,
-                stderr=self.log,
-            )
-            # block until first output
-            while self.log.tell() == 0:
-                await asyncio.sleep(0.1)
+            out = self.log
         else:
-            self.process = await asyncio.create_subprocess_shell(
-                f"{self.server_path} --urls {self.address()}",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
-            assert self.process.stdout is not None
-            # block until first output
-            await self.process.stdout.readline()
+            out = subprocess.DEVNULL
+
+        self.process = await asyncio.create_subprocess_shell(
+            f"{self.server_path} --urls {self.address()}",
+            stdout=out,
+            stderr=out,
+        )
 
         self.session = aiohttp.ClientSession(self.address())
+
+        # block until webserver has launched
+        while True:
+            async with self.session.get("/api/status") as response:
+                if response.status == 200:
+                    break
+                await asyncio.sleep(0.05)
 
     @classmethod
     async def create(cls, port: int, use_logging: bool) -> Self:
@@ -173,5 +183,5 @@ class ServerAsync(ServerBase):
             self.log.close()
             self.log = None
 
-        if status == 1:
+        if status != signal.SIGTERM:
             raise SystemError("Could not cleanly shutdown server subprocess")

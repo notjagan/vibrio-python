@@ -77,43 +77,43 @@ class Lazer(LazerBase[Server]):
         if self.server is None:
             raise ServerStateError("Server is not currently active")
 
-        response = self.server.session.get(f"/api/beatmaps/{beatmap_id}/status")
-        if response.status_code == 200:
-            return True
-        elif response.status_code == 404:
-            return False
-        raise ServerError(
-            f"Unexpected status code {response.status_code}; check server logs for error details"
-        )
+        with self.server.session.get(f"/api/beatmaps/{beatmap_id}/status") as response:
+            if response.status_code == 200:
+                return True
+            elif response.status_code == 404:
+                return False
+            raise ServerError(
+                f"Unexpected status code {response.status_code}; check server logs for error details"
+            )
 
     def get_beatmap(self, beatmap_id: int) -> BinaryIO:
         """Returns a file stream for the given beatmap."""
         if self.server is None:
             raise ServerStateError("Server is not currently active")
 
-        response = self.server.session.get(f"/api/beatmaps/{beatmap_id}")
-        if response.status_code == 200:
-            stream = io.BytesIO()
-            stream.write(response.content)
-            stream.seek(0)
-            return stream
-        elif response.status_code == 404:
-            raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
-        else:
-            raise ServerError(
-                f"Unexpected status code {response.status_code}; check server logs for error details"
-            )
+        with self.server.session.get(f"/api/beatmaps/{beatmap_id}") as response:
+            if response.status_code == 200:
+                stream = io.BytesIO()
+                stream.write(response.content)
+                stream.seek(0)
+                return stream
+            elif response.status_code == 404:
+                raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+            else:
+                raise ServerError(
+                    f"Unexpected status code {response.status_code}; check server logs for error details"
+                )
 
     def clear_cache(self) -> None:
         """Clears beatmap cache (if applicable)."""
         if self.server is None:
             raise ServerStateError("Server is not currently active")
 
-        response = self.server.session.delete("/api/beatmaps/cache")
-        if response.status_code != 200:
-            raise ServerError(
-                f"Unexpected status code {response.status_code}; check server logs for error details"
-            )
+        with self.server.session.delete("/api/beatmaps/cache") as response:
+            if response.status_code != 200:
+                raise ServerError(
+                    f"Unexpected status code {response.status_code}; check server logs for error details"
+                )
 
 
 class LazerAsync(LazerBase[ServerAsync]):
