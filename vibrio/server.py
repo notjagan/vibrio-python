@@ -95,9 +95,13 @@ class Server(ServerBase):
 
         # block until webserver has launched
         while True:
-            with self.session.get("/api/status") as response:
-                if response.status_code == 200:
-                    break
+            try:
+                with self.session.get("/api/status") as response:
+                    if response.status_code == 200:
+                        break
+            except ConnectionError:
+                pass
+            finally:
                 time.sleep(0.05)
 
     @classmethod
@@ -156,9 +160,13 @@ class ServerAsync(ServerBase):
 
         # block until webserver has launched
         while True:
-            async with self.session.get("/api/status") as response:
-                if response.status == 200:
-                    break
+            try:
+                async with self.session.get("/api/status") as response:
+                    if response.status == 200:
+                        break
+            except ConnectionError:
+                pass
+            finally:
                 await asyncio.sleep(0.05)
 
     @classmethod
