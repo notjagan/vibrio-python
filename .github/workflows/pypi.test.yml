@@ -1,0 +1,22 @@
+name: Publish to TestPyPI
+
+on:
+  workflow_dispatch
+
+jobs:
+  pypi-publish:
+    name: Upload release to PyPI
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+    - name: Download artifact
+      id: download-artifact
+      uses: dawidd6/action-download-artifact@v2
+      with:
+        workflow: build.yml
+        path: dist
+    - name: Publish package distributions to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1 
+      with:
+        repository-url: https://test.pypi.org/legacy/
