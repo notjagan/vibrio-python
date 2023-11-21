@@ -1,0 +1,36 @@
+[project]
+name = "vibrio"
+version = "0.1.0"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+dependencies = [
+    "requests",
+    "typing_extensions",
+    "aiohttp",
+    "psutil",
+]
+
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=68.2"]
+
+[tool.setuptools]
+packages = ["vibrio"]
+include-package-data = false
+
+[tool.cibuildwheel]
+test-command = "pytest {package}"
+test-requires = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[tool.cibuildwheel.linux]
+# install dotnet framework on linux containers
+before-all = "curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --version 6.0.416"
+
+[tool.cibuildwheel.linux.environment]
+DOTNET_ROOT = "$HOME/.dotnet"
+PATH = "$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools"
+DOTNET_SYSTEM_GLOBALIZATION_INVARIANT = "1"
