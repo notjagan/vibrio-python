@@ -34,7 +34,7 @@ class PrecompiledDistribution(Distribution):
 class PrecompiledExtension(Extension):
     """Represents an extension module with an existing executable file."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path) -> None:
         self.path = path
         super().__init__(self.path.name, [])
 
@@ -42,7 +42,7 @@ class PrecompiledExtension(Extension):
 class BuildPrecompiledExtensions(build_ext):
     """Command to copy executables for precompiled extensions."""
 
-    def run(self):
+    def run(self) -> None:
         """Directly copies relevant executable extension(s)."""
         for ext in self.extensions:
             if isinstance(ext, PrecompiledExtension):
@@ -65,15 +65,16 @@ class BuildVendoredDependencies(Command):
     def finalize_options(self) -> None:
         pass
 
-    def run(self):
+    def run(self) -> None:
         def onerror(
             func: Callable[..., Any], path: str, ex_info: tuple[Exception, ...]
-        ):
+        ) -> None:
             ex, *_ = ex_info
             # resolve any permission issues
             if ex is PermissionError and not os.access(path, os.W_OK):
                 os.chmod(path, stat.S_IWUSR)
                 func(path)
+            # ignore missing file
             elif ex is FileNotFoundError:
                 pass
             else:
@@ -104,6 +105,8 @@ class BuildVendoredDependencies(Command):
 
 
 class CustomBuild(build):
+    """Build process including compiling server executable."""
+
     sub_commands = [("build_vendor", None)] + build.sub_commands
 
 
