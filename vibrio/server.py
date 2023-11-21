@@ -99,7 +99,7 @@ class Server(ServerBase):
                 with self.session.get("/api/status") as response:
                     if response.status_code == 200:
                         break
-            except Exception:
+            except (ConnectionError, IOError):
                 pass
             finally:
                 time.sleep(0.05)
@@ -166,7 +166,7 @@ class ServerAsync(ServerBase):
                 async with self.session.get("/api/status") as response:
                     if response.status == 200:
                         break
-            except Exception:
+            except (ConnectionError, aiohttp.ClientConnectionError):
                 pass
             finally:
                 await asyncio.sleep(0.05)
