@@ -2,7 +2,6 @@ name: Publish to TestPyPI
 
 on:
   workflow_dispatch:
-  pull_request:
 
 jobs:
   pypi-publish:
@@ -17,6 +16,8 @@ jobs:
       with:
         workflow: build.yml
         path: dist
+        workflow_conclusion: success
+        name: artifact
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1 
       with:
