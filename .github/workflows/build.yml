@@ -52,15 +52,29 @@ jobs:
       with:
         path: ./dist/*.whl
 
+  build-sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - uses: actions/setup-python@v4
+
+    - run: python -m setup.py sdist
+
+    - uses: actions/upload-artifact@v3
+      with:
+        path: ./dist/*.tar.gz
+
   check:
     name: All wheels built successfully
-  
     if: always()
-
     needs:
     - build-wheels
-
-    runs-on: Ubuntu-latest
+    runs-on: ubuntu-latest
 
     steps:
     - uses: re-actors/alls-green@release/v1
