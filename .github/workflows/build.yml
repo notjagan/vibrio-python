@@ -5,6 +5,10 @@ on:
     branches:
     - master
   pull_request:
+      # don't rebuild when only modifying other workflows
+      paths:
+        - '!.github/workflows/**'
+        - '.github/workflows/build.yml'
 
 jobs:
   build-wheels:
