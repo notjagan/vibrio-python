@@ -1,0 +1,3 @@
+graft vibrio/vendor
+global-exclude bin/**/* obj/**/* publish/*
+prune vibrio/lib
