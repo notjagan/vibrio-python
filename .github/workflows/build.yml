@@ -74,7 +74,7 @@ jobs:
 
   check:
     name: All wheels built successfully
-    if: always()
+    if: success() || failure()
     needs:
       - build-wheels
     runs-on: ubuntu-latest
