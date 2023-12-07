@@ -6,7 +6,7 @@ on:
 
 jobs:
   target-version:
-    name: Get package version of target branch
+    name: Target branch version
     runs-on: ubuntu-latest
 
     outputs:
@@ -28,7 +28,7 @@ jobs:
           echo "version=$(pip show requests | grep "Version:" | cut -d " " -f 2)" >> "$GITHUB_OUTPUT"
 
   new-version:
-    name: Get package version of pull request branch
+    name: Current branch version
     runs-on: ubuntu-latest
 
     outputs:
@@ -49,7 +49,7 @@ jobs:
           echo "version=$(pip show requests | grep "Version:" | cut -d " " -f 2)" >> "$GITHUB_OUTPUT"
 
   check-version:
-    name: Ensure package version differs from version on target branch
+    name: Package version updated
     runs-on: ubuntu-latest
     needs: [target-version, new-version]
 
