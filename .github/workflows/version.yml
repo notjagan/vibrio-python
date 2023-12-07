@@ -5,57 +5,34 @@ on:
     branches: master
 
 jobs:
-  target-version:
-    name: Target branch version
+  check-version:
+    name: Package version updated
     runs-on: ubuntu-latest
-
-    outputs:
-      version: ${{ steps.version.outputs.version }}
     
     steps:
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - id: new-version
+        run: |
+          echo "version=$(python setup.py --version)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           ref: ${{ github.base_ref }}
 
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - id: version
+      - id: target-version
         run: |
-          pip install .
-          echo "version=$(pip show vibrio | grep "Version:" | cut -d " " -f 2)" >> "$GITHUB_OUTPUT"
+          echo "version=$(python setup.py --version)" >> "$GITHUB_OUTPUT"
 
-  new-version:
-    name: Current branch version
-    runs-on: ubuntu-latest
-
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-    
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - id: version
-        run: |
-          pip install .
-          echo "version=$(pip show vibrio | grep "Version:" | cut -d " " -f 2)" >> "$GITHUB_OUTPUT"
-
-  check-version:
-    name: Package version updated
-    runs-on: ubuntu-latest
-    needs: [target-version, new-version]
-
-    steps:
       - env:
-          TARGET_VERSION: ${{ needs.target-version.outputs.version }}
-          NEW_VERSION: ${{ needs.new-version.outputs.version }}
+          NEW_VERSION: ${{ steps.new-version.outputs.version }}
+          TARGET_VERSION: ${{ steps.target-version.outputs.version }}
         run: |
           ! (printf '%s\n' "$NEW_VERSION" "$TARGET_VERSION" | sort -C -V)
