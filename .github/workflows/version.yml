@@ -58,4 +58,4 @@ jobs:
           TARGET_VERSION: ${{ needs.target-version.outputs.version }}
           NEW_VERSION: ${{ needs.new-version.outputs.version }}
         run: |
-          [ "$TARGET_VERSION" != "NEW_VERSION" ]
+          [ "$TARGET_VERSION" != "$NEW_VERSION" ]
