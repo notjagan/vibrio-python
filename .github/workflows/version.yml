@@ -1,0 +1,38 @@
+name: Ensure version has been updated
+
+on:
+  pull_request:
+    branches: master
+
+jobs:
+  check-version:
+    name: Package version updated
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - id: new-version
+        run: |
+          echo "version=$(python setup.py --version)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: ${{ github.base_ref }}
+
+      - id: target-version
+        run: |
+          echo "version=$(python setup.py --version)" >> "$GITHUB_OUTPUT"
+
+      - env:
+          NEW_VERSION: ${{ steps.new-version.outputs.version }}
+          TARGET_VERSION: ${{ steps.target-version.outputs.version }}
+        run: |
+          ! (printf '%s\n' "$NEW_VERSION" "$TARGET_VERSION" | sort -C -V)
