@@ -83,7 +83,7 @@ jobs:
 
     steps:
       - name: Check build matrix status
-        if: failure() || cancelled()
+        if: ${{ !success() }}
         run: exit 1
 
   publish:
