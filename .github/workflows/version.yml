@@ -18,7 +18,8 @@ jobs:
         with:
           submodules: recursive
 
-      - id: new-version
+      - name: Retrieve new version number
+        id: new-version
         run: |
           echo "version=$(python setup.py --version)" >> "$GITHUB_OUTPUT"
 
@@ -27,11 +28,13 @@ jobs:
           submodules: recursive
           ref: ${{ github.base_ref }}
 
-      - id: target-version
+      - name: Retrieve target branch version number
+        id: target-version
         run: |
           echo "version=$(python setup.py --version)" >> "$GITHUB_OUTPUT"
 
-      - env:
+      - name: Compare version numbers
+        env:
           NEW_VERSION: ${{ steps.new-version.outputs.version }}
           TARGET_VERSION: ${{ steps.target-version.outputs.version }}
         run: |
