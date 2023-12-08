@@ -103,5 +103,10 @@ jobs:
         name: artifact
         path: dist
 
+    - name: Upload binaries to release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/*
+
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
