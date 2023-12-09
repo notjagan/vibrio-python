@@ -4,7 +4,7 @@ import pytest
 from pytest import approx  # type: ignore
 
 from vibrio import Lazer, LazerAsync
-from vibrio.types import OsuMod
+from vibrio.types import HitStatistics, OsuMod
 
 RESOURCES_DIR = Path(__file__).absolute().parent / "resources"
 
@@ -59,6 +59,18 @@ def test_calculate_difficulty_file(
         attributes = lazer.calculate_difficulty(mods, beatmap=beatmap)
         assert attributes.star_rating == approx(star_rating, 0.03)
         assert attributes.max_combo == max_combo
+
+
+@pytest.mark.parametrize("beatmap_id", [1001682])
+@pytest.mark.parametrize("mods", [[OsuMod.HIDDEN, OsuMod.DOUBLE_TIME]])
+@pytest.mark.parametrize("hit_stats", [HitStatistics(2019, 104, 0, 3, 3141)])
+@pytest.mark.parametrize("pp", [1304.35])
+def test_calculate_performance_hitstat(
+    beatmap_id: int, mods: list[OsuMod], hit_stats: HitStatistics, pp: float
+):
+    with Lazer() as lazer:
+        attributes = lazer.calculate_performance(beatmap_id, hit_stats, mods)
+        assert attributes.total == approx(pp, 0.05)
 
 
 @pytest.mark.asyncio
