@@ -6,6 +6,8 @@ on:
     - master
   pull_request:
   release:
+    types:
+      - published
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -77,15 +79,15 @@ jobs:
 
   check:
     name: All wheels built successfully
+    runs-on: ubuntu-latest
     if: always()
     needs:
       - build-wheels
-    runs-on: ubuntu-latest
 
     steps:
-      - name: Check build matrix status
-        if: ${{ !success() }}
-        run: exit 1
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
 
   publish:
     name: Publish package
@@ -95,7 +97,7 @@ jobs:
       - build-sdist
     permissions:
       id-token: write
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: github.event_name == 'release'
     
     steps:
     - id: download-artifact
