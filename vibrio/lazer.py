@@ -21,7 +21,12 @@ import psutil
 import requests
 from typing_extensions import Self
 
-from vibrio.types import OsuDifficultyAttributes, OsuMod
+from vibrio.types import (
+    HitStatistics,
+    OsuDifficultyAttributes,
+    OsuMod,
+    OsuPerformanceAttributes,
+)
 
 PACKAGE_DIR = Path(__file__).absolute().parent
 
@@ -250,7 +255,7 @@ class Lazer(LazerBase):
                 f"/api/difficulty/{beatmap_id}", params=params
             ) as response:
                 if response.status_code == 200:
-                    return OsuDifficultyAttributes.from_json(response.json())
+                    return OsuDifficultyAttributes.from_dict(response.json())
                 elif response.status_code == 404:
                     raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
                 else:
@@ -263,7 +268,7 @@ class Lazer(LazerBase):
                 "/api/difficulty", params=params, files={"beatmap": beatmap}
             ) as response:
                 if response.status_code == 200:
-                    return OsuDifficultyAttributes.from_json(response.json())
+                    return OsuDifficultyAttributes.from_dict(response.json())
                 else:
                     raise ServerError(
                         f"Unexpected status code {response.status_code}; check server logs for error details"
@@ -273,6 +278,22 @@ class Lazer(LazerBase):
             raise ValueError(
                 "Exactly one of `beatmap_id` and `beatmap_data` should be set"
             )
+
+    def calculate_performance(
+        self, beatmap_id: int, hit_stats: HitStatistics, mods: list[OsuMod]
+    ) -> OsuPerformanceAttributes:
+        params = {"mods": [mod.value for mod in mods]} | hit_stats.to_dict()
+        with self.session.get(
+            f"/api/performance/{beatmap_id}", params=params
+        ) as response:
+            if response.status_code == 200:
+                return OsuPerformanceAttributes.from_dict(response.json())
+            elif response.status_code == 404:
+                raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+            else:
+                raise ServerError(
+                    f"Unexpected status code {response.status_code}; check server logs for error details"
+                )
 
 
 class LazerAsync(LazerBase):
@@ -417,7 +438,7 @@ class LazerAsync(LazerBase):
                 f"/api/difficulty/{beatmap_id}", params=params
             ) as response:
                 if response.status == 200:
-                    return OsuDifficultyAttributes.from_json(await response.json())
+                    return OsuDifficultyAttributes.from_dict(await response.json())
                 elif response.status == 404:
                     raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
                 else:
@@ -437,7 +458,7 @@ class LazerAsync(LazerBase):
                 "/api/difficulty", params=params, data=data
             ) as response:
                 if response.status == 200:
-                    return OsuDifficultyAttributes.from_json(await response.json())
+                    return OsuDifficultyAttributes.from_dict(await response.json())
                 else:
                     raise ServerError(
                         f"Unexpected status code {response.status}; check server logs for error details"
