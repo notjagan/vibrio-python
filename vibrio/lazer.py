@@ -397,3 +397,53 @@ class LazerAsync(LazerBase):
                 raise ServerError(
                     f"Unexpected status code {response.status}; check server logs for error details"
                 )
+
+    async def calculate_difficulty(
+        self,
+        mods: list[OsuMod],
+        beatmap_id: Optional[int] = None,
+        beatmap: Optional[TextIO] = None,
+    ) -> OsuDifficultyAttributes:
+        params = {"mods": [mod.value for mod in mods]}
+
+        if beatmap_id is not None:
+            if beatmap is not None:
+                raise ValueError(
+                    "Exactly one of `beatmap_id` and `beatmap_data` should be set"
+                )
+
+            async with self.session.get(
+                f"/api/difficulty/{beatmap_id}", params=params
+            ) as response:
+                print(response.text)
+                if response.status == 200:
+                    return OsuDifficultyAttributes.from_json(await response.json())
+                elif response.status == 404:
+                    raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+                else:
+                    raise ServerError(
+                        f"Unexpected status code {response.status}; check server logs for error details"
+                    )
+
+        elif beatmap is not None:
+            data = aiohttp.FormData()
+            data.add_field(
+                "beatmap",
+                beatmap.read(),
+                content_type="multipart/form-data",
+                filename="beatmap",
+            )
+            async with self.session.post(
+                "/api/difficulty", params=params, data=data
+            ) as response:
+                if response.status == 200:
+                    return OsuDifficultyAttributes.from_json(await response.json())
+                else:
+                    raise ServerError(
+                        f"Unexpected status code {response.status}; check server logs for error details"
+                    )
+
+        else:
+            raise ValueError(
+                "Exactly one of `beatmap_id` and `beatmap_data` should be set"
+            )
