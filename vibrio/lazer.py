@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import atexit
 import io
+import logging
 import platform
 import signal
 import socket
@@ -85,11 +86,12 @@ class LazerBase(ABC):
         self.running = True
 
         if self.use_logging:
+            logging.info(f"Launching server on port {self.port}")
             self.log = tempfile.NamedTemporaryFile(delete=False)
 
     def _stop(self) -> None:
         if self.log is not None:
-            print(f"Server output logged at {self.log.file.name}")
+            logging.info(f"Server output logged at {self.log.file.name}")
             self.log.close()
             self.log = None
 
@@ -247,7 +249,6 @@ class Lazer(LazerBase):
             with self.session.get(
                 f"/api/difficulty/{beatmap_id}", params=params
             ) as response:
-                print(response.text)
                 if response.status_code == 200:
                     return OsuDifficultyAttributes.from_json(response.json())
                 elif response.status_code == 404:
@@ -415,7 +416,6 @@ class LazerAsync(LazerBase):
             async with self.session.get(
                 f"/api/difficulty/{beatmap_id}", params=params
             ) as response:
-                print(response.text)
                 if response.status == 200:
                     return OsuDifficultyAttributes.from_json(await response.json())
                 elif response.status == 404:
