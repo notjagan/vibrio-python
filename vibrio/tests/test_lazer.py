@@ -85,3 +85,32 @@ async def test_cache_status_async(beatmap_id: int):
         assert await lazer.has_beatmap(beatmap_id)
         await lazer.clear_cache()
         assert not await lazer.has_beatmap(beatmap_id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("beatmap_id", [1001682])
+@pytest.mark.parametrize("mods", [[OsuMod.DOUBLE_TIME]])
+@pytest.mark.parametrize("star_rating", [9.7])
+@pytest.mark.parametrize("max_combo", [3220])
+async def test_calculate_difficulty_id_async(
+    beatmap_id: int, mods: list[OsuMod], star_rating: float, max_combo: int
+):
+    async with LazerAsync() as lazer:
+        attributes = await lazer.calculate_difficulty(mods, beatmap_id=beatmap_id)
+        assert attributes.star_rating == approx(star_rating, 0.03)
+        assert attributes.max_combo == max_combo
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("beatmap_filename", ["1001682.osu"])
+@pytest.mark.parametrize("mods", [[OsuMod.DOUBLE_TIME]])
+@pytest.mark.parametrize("star_rating", [9.7])
+@pytest.mark.parametrize("max_combo", [3220])
+async def test_calculate_difficulty_file_async(
+    beatmap_filename: str, mods: list[OsuMod], star_rating: float, max_combo: int
+):
+    async with LazerAsync() as lazer:
+        with open(RESOURCES_DIR / beatmap_filename) as beatmap:
+            attributes = await lazer.calculate_difficulty(mods, beatmap=beatmap)
+        assert attributes.star_rating == approx(star_rating, 0.03)
+        assert attributes.max_combo == max_combo
