@@ -13,7 +13,7 @@ import time
 import urllib.parse
 from abc import ABC
 from pathlib import Path
-from typing import Any, BinaryIO, Optional
+from typing import Any, BinaryIO, Optional, TextIO
 
 import aiohttp
 import psutil
@@ -231,23 +231,47 @@ class Lazer(LazerBase):
                 )
 
     def calculate_difficulty(
-        self, beatmap_id: int, mods: list[OsuMod]
+        self,
+        mods: list[OsuMod],
+        beatmap_id: Optional[int] = None,
+        beatmap: Optional[TextIO] = None,
     ) -> OsuDifficultyAttributes:
-        with self.session.get(
-            f"/api/difficulty/{beatmap_id}",
-            params={
-                "beatmapId": beatmap_id,
-                "mods": [mod.value for mod in mods],
-            },
-        ) as response:
-            if response.status_code == 200:
-                return OsuDifficultyAttributes.from_json(response.json())
-            elif response.status_code == 404:
-                raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
-            else:
-                raise ServerError(
-                    f"Unexpected status code {response.status_code}; check server logs for error details"
+        params = {"mods": [mod.value for mod in mods]}
+
+        if beatmap_id is not None:
+            if beatmap is not None:
+                raise ValueError(
+                    "Exactly one of `beatmap_id` and `beatmap_data` should be set"
                 )
+
+            with self.session.get(
+                f"/api/difficulty/{beatmap_id}", params=params
+            ) as response:
+                print(response.text)
+                if response.status_code == 200:
+                    return OsuDifficultyAttributes.from_json(response.json())
+                elif response.status_code == 404:
+                    raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+                else:
+                    raise ServerError(
+                        f"Unexpected status code {response.status_code}; check server logs for error details"
+                    )
+
+        elif beatmap is not None:
+            with self.session.post(
+                "/api/difficulty", params=params, files={"beatmap": beatmap}
+            ) as response:
+                if response.status_code == 200:
+                    return OsuDifficultyAttributes.from_json(response.json())
+                else:
+                    raise ServerError(
+                        f"Unexpected status code {response.status_code}; check server logs for error details"
+                    )
+
+        else:
+            raise ValueError(
+                "Exactly one of `beatmap_id` and `beatmap_data` should be set"
+            )
 
 
 class LazerAsync(LazerBase):
