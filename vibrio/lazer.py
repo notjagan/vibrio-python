@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import atexit
 import io
+import logging
 import platform
 import signal
 import socket
@@ -13,12 +14,14 @@ import time
 import urllib.parse
 from abc import ABC
 from pathlib import Path
-from typing import Any, BinaryIO, Optional
+from typing import Any, BinaryIO, Optional, TextIO
 
 import aiohttp
 import psutil
 import requests
 from typing_extensions import Self
+
+from vibrio.types import OsuDifficultyAttributes, OsuMod
 
 PACKAGE_DIR = Path(__file__).absolute().parent
 
@@ -83,11 +86,12 @@ class LazerBase(ABC):
         self.running = True
 
         if self.use_logging:
+            logging.info(f"Launching server on port {self.port}")
             self.log = tempfile.NamedTemporaryFile(delete=False)
 
     def _stop(self) -> None:
         if self.log is not None:
-            print(f"Server output logged at {self.log.file.name}")
+            logging.info(f"Server output logged at {self.log.file.name}")
             self.log.close()
             self.log = None
 
@@ -228,6 +232,48 @@ class Lazer(LazerBase):
                     f"Unexpected status code {response.status_code}; check server logs for error details"
                 )
 
+    def calculate_difficulty(
+        self,
+        mods: list[OsuMod],
+        beatmap_id: Optional[int] = None,
+        beatmap: Optional[TextIO] = None,
+    ) -> OsuDifficultyAttributes:
+        params = {"mods": [mod.value for mod in mods]}
+
+        if beatmap_id is not None:
+            if beatmap is not None:
+                raise ValueError(
+                    "Exactly one of `beatmap_id` and `beatmap_data` should be set"
+                )
+
+            with self.session.get(
+                f"/api/difficulty/{beatmap_id}", params=params
+            ) as response:
+                if response.status_code == 200:
+                    return OsuDifficultyAttributes.from_json(response.json())
+                elif response.status_code == 404:
+                    raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+                else:
+                    raise ServerError(
+                        f"Unexpected status code {response.status_code}; check server logs for error details"
+                    )
+
+        elif beatmap is not None:
+            with self.session.post(
+                "/api/difficulty", params=params, files={"beatmap": beatmap}
+            ) as response:
+                if response.status_code == 200:
+                    return OsuDifficultyAttributes.from_json(response.json())
+                else:
+                    raise ServerError(
+                        f"Unexpected status code {response.status_code}; check server logs for error details"
+                    )
+
+        else:
+            raise ValueError(
+                "Exactly one of `beatmap_id` and `beatmap_data` should be set"
+            )
+
 
 class LazerAsync(LazerBase):
     """Asynchronous implementation for interfacing with osu!lazer functionality."""
@@ -352,3 +398,52 @@ class LazerAsync(LazerBase):
                 raise ServerError(
                     f"Unexpected status code {response.status}; check server logs for error details"
                 )
+
+    async def calculate_difficulty(
+        self,
+        mods: list[OsuMod],
+        beatmap_id: Optional[int] = None,
+        beatmap: Optional[TextIO] = None,
+    ) -> OsuDifficultyAttributes:
+        params = {"mods": [mod.value for mod in mods]}
+
+        if beatmap_id is not None:
+            if beatmap is not None:
+                raise ValueError(
+                    "Exactly one of `beatmap_id` and `beatmap_data` should be set"
+                )
+
+            async with self.session.get(
+                f"/api/difficulty/{beatmap_id}", params=params
+            ) as response:
+                if response.status == 200:
+                    return OsuDifficultyAttributes.from_json(await response.json())
+                elif response.status == 404:
+                    raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+                else:
+                    raise ServerError(
+                        f"Unexpected status code {response.status}; check server logs for error details"
+                    )
+
+        elif beatmap is not None:
+            data = aiohttp.FormData()
+            data.add_field(
+                "beatmap",
+                beatmap.read(),
+                content_type="multipart/form-data",
+                filename="beatmap",
+            )
+            async with self.session.post(
+                "/api/difficulty", params=params, data=data
+            ) as response:
+                if response.status == 200:
+                    return OsuDifficultyAttributes.from_json(await response.json())
+                else:
+                    raise ServerError(
+                        f"Unexpected status code {response.status}; check server logs for error details"
+                    )
+
+        else:
+            raise ValueError(
+                "Exactly one of `beatmap_id` and `beatmap_data` should be set"
+            )
