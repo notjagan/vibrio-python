@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import pytest
 from pytest import approx  # type: ignore
 
 from vibrio import Lazer, LazerAsync
 from vibrio.types import OsuMod
+
+RESOURCES_DIR = Path(__file__).absolute().parent / "resources"
 
 pytest_plugins = ("pytest_asyncio",)
 
@@ -39,7 +43,20 @@ def test_calculate_difficulty_id(
     beatmap_id: int, mods: list[OsuMod], star_rating: float, max_combo: int
 ):
     with Lazer() as lazer:
-        attributes = lazer.calculate_difficulty(beatmap_id, mods)
+        attributes = lazer.calculate_difficulty(mods, beatmap_id=beatmap_id)
+        assert attributes.star_rating == approx(star_rating, 0.03)
+        assert attributes.max_combo == max_combo
+
+
+@pytest.mark.parametrize("beatmap_filename", ["1001682.osu"])
+@pytest.mark.parametrize("mods", [[OsuMod.DOUBLE_TIME]])
+@pytest.mark.parametrize("star_rating", [9.7])
+@pytest.mark.parametrize("max_combo", [3220])
+def test_calculate_difficulty_file(
+    beatmap_filename: str, mods: list[OsuMod], star_rating: float, max_combo: int
+):
+    with Lazer() as lazer, open(RESOURCES_DIR / beatmap_filename) as beatmap:
+        attributes = lazer.calculate_difficulty(mods, beatmap=beatmap)
         assert attributes.star_rating == approx(star_rating, 0.03)
         assert attributes.max_combo == max_combo
 
