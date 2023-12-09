@@ -79,15 +79,15 @@ jobs:
 
   check:
     name: All wheels built successfully
+    runs-on: ubuntu-latest
     if: always()
     needs:
       - build-wheels
-    runs-on: ubuntu-latest
 
     steps:
-      - name: Check build matrix status
-        if: ${{ !success() }}
-        run: exit 1
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
 
   publish:
     name: Publish package
