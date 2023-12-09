@@ -97,6 +97,7 @@ jobs:
       - build-sdist
     permissions:
       id-token: write
+      contents: write
     if: github.event_name == 'release'
     
     steps:
