@@ -1,6 +1,8 @@
 import pytest
+from pytest import approx  # type: ignore
 
 from vibrio import Lazer, LazerAsync
+from vibrio.types import OsuMod
 
 pytest_plugins = ("pytest_asyncio",)
 
@@ -27,6 +29,19 @@ def test_cache_status(beatmap_id: int):
         assert lazer.has_beatmap(beatmap_id)
         lazer.clear_cache()
         assert not lazer.has_beatmap(beatmap_id)
+
+
+@pytest.mark.parametrize("beatmap_id", [1001682])
+@pytest.mark.parametrize("mods", [[OsuMod.DOUBLE_TIME]])
+@pytest.mark.parametrize("star_rating", [9.7])
+@pytest.mark.parametrize("max_combo", [3220])
+def test_calculate_difficulty_id(
+    beatmap_id: int, mods: list[OsuMod], star_rating: float, max_combo: int
+):
+    with Lazer() as lazer:
+        attributes = lazer.calculate_difficulty(beatmap_id, mods)
+        assert attributes.star_rating == approx(star_rating, 0.03)
+        assert attributes.max_combo == max_combo
 
 
 @pytest.mark.asyncio
