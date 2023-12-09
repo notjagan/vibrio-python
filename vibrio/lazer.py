@@ -20,6 +20,8 @@ import psutil
 import requests
 from typing_extensions import Self
 
+from vibrio.types import OsuDifficultyAttributes, OsuMod
+
 PACKAGE_DIR = Path(__file__).absolute().parent
 
 
@@ -224,6 +226,25 @@ class Lazer(LazerBase):
         """Clears beatmap cache (if applicable)."""
         with self.session.delete("/api/beatmaps/cache") as response:
             if response.status_code != 200:
+                raise ServerError(
+                    f"Unexpected status code {response.status_code}; check server logs for error details"
+                )
+
+    def calculate_difficulty(
+        self, beatmap_id: int, mods: list[OsuMod]
+    ) -> OsuDifficultyAttributes:
+        with self.session.get(
+            f"/api/difficulty/{beatmap_id}",
+            params={
+                "beatmapId": beatmap_id,
+                "mods": [mod.value for mod in mods],
+            },
+        ) as response:
+            if response.status_code == 200:
+                return OsuDifficultyAttributes.from_json(response.json())
+            elif response.status_code == 404:
+                raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+            else:
                 raise ServerError(
                     f"Unexpected status code {response.status_code}; check server logs for error details"
                 )
