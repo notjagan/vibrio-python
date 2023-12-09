@@ -1,11 +1,11 @@
 from dataclasses import dataclass, fields
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 
 from typing_extensions import Self
 
 
-class OsuMod(StrEnum):
+class OsuMod(Enum):
     NO_FAIL = "NF"
     EASY = "EZ"
     TOUCH_DEVICE = "TD"
