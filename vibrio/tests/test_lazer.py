@@ -137,3 +137,13 @@ class TestPerformance:
                 hit_stats=test_case.hit_stats,
             )
             assert attributes.total == approx(test_case.pp, 0.05)
+
+    def test_calculate_performance_difficulty(self, test_case: PerformanceTestCase):
+        with Lazer() as lazer:
+            attributes = lazer.calculate_performance(
+                difficulty=lazer.calculate_difficulty(
+                    mods=test_case.mods, beatmap_id=test_case.beatmap_id
+                ),
+                hit_stats=test_case.hit_stats,
+            )
+            assert attributes.total == approx(test_case.pp, 0.05)

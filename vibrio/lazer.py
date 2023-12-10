@@ -14,7 +14,7 @@ import time
 import urllib.parse
 from abc import ABC
 from pathlib import Path
-from typing import Any, BinaryIO, Optional, TextIO
+from typing import Any, BinaryIO, TextIO
 
 import aiohttp
 import psutil
@@ -65,7 +65,7 @@ class LazerBase(ABC):
 
     STARTUP_DELAY = 0.05  # Amount of time (seconds) between requests during startup
 
-    def __init__(self, port: Optional[int] = None, use_logging: bool = True) -> None:
+    def __init__(self, port: int | None = None, use_logging: bool = True) -> None:
         if port is None:
             self.port = find_open_port()
         else:
@@ -78,7 +78,7 @@ class LazerBase(ABC):
             raise FileNotFoundError(f'No executable found at "{self.server_path}".')
         self.server_path.chmod(self.server_path.stat().st_mode | stat.S_IEXEC)
 
-        self.log: Optional[tempfile._TemporaryFileWrapper[bytes]] = None
+        self.log: tempfile._TemporaryFileWrapper[bytes] | None = None
 
     def address(self) -> str:
         """Constructs the base URL for the web server."""
@@ -129,7 +129,7 @@ class Lazer(LazerBase):
         return self._session
 
     @session.setter
-    def session(self, value: Optional[BaseUrlSession]) -> None:
+    def session(self, value: BaseUrlSession | None) -> None:
         self._session = value
 
     @property
@@ -139,7 +139,7 @@ class Lazer(LazerBase):
         return self._process
 
     @process.setter
-    def process(self, value: Optional[subprocess.Popen[bytes]]) -> None:
+    def process(self, value: subprocess.Popen[bytes] | None) -> None:
         self._process = value
 
     def start(self) -> None:
@@ -239,11 +239,15 @@ class Lazer(LazerBase):
 
     def calculate_difficulty(
         self,
-        mods: list[OsuMod],
-        beatmap_id: Optional[int] = None,
-        beatmap: Optional[TextIO] = None,
+        *,
+        beatmap_id: int | None = None,
+        beatmap: TextIO | None = None,
+        mods: list[OsuMod] | None = None,
     ) -> OsuDifficultyAttributes:
-        params = {"mods": [mod.value for mod in mods]}
+        if mods is not None:
+            params = {"mods": [mod.value for mod in mods]}
+        else:
+            params = {}
 
         if beatmap_id is not None:
             if beatmap is not None:
@@ -280,20 +284,42 @@ class Lazer(LazerBase):
             )
 
     def calculate_performance(
-        self, beatmap_id: int, hit_stats: HitStatistics, mods: list[OsuMod]
+        self,
+        *,
+        beatmap_id: int | None = None,
+        mods: list[OsuMod] | None = None,
+        difficulty: OsuDifficultyAttributes | None = None,
+        hit_stats: HitStatistics | None = None,
     ) -> OsuPerformanceAttributes:
-        params = {"mods": [mod.value for mod in mods]} | hit_stats.to_dict()
-        with self.session.get(
-            f"/api/performance/{beatmap_id}", params=params
-        ) as response:
-            if response.status_code == 200:
-                return OsuPerformanceAttributes.from_dict(response.json())
-            elif response.status_code == 404:
-                raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
-            else:
-                raise ServerError(
-                    f"Unexpected status code {response.status_code}; check server logs for error details"
-                )
+        if beatmap_id is not None and hit_stats is not None:
+            params = hit_stats.to_dict()
+            if mods is not None:
+                params |= {"mods": [mod.value for mod in mods]}
+
+            with self.session.get(
+                f"/api/performance/{beatmap_id}", params=params
+            ) as response:
+                if response.status_code == 200:
+                    return OsuPerformanceAttributes.from_dict(response.json())
+                elif response.status_code == 404:
+                    raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+                else:
+                    raise ServerError(
+                        f"Unexpected status code {response.status_code}; check server logs for error details"
+                    )
+
+        elif difficulty is not None and hit_stats is not None:
+            params = difficulty.to_dict() | hit_stats.to_dict()
+            with self.session.get(f"/api/performance", params=params) as response:
+                if response.status_code == 200:
+                    return OsuPerformanceAttributes.from_dict(response.json())
+                else:
+                    raise ServerError(
+                        f"Unexpected status code {response.status_code}; check server logs for error details"
+                    )
+
+        else:
+            raise ValueError
 
 
 class LazerAsync(LazerBase):
@@ -312,7 +338,7 @@ class LazerAsync(LazerBase):
         return self._session
 
     @session.setter
-    def session(self, value: Optional[aiohttp.ClientSession]) -> None:
+    def session(self, value: aiohttp.ClientSession | None) -> None:
         self._session = value
 
     @property
@@ -322,7 +348,7 @@ class LazerAsync(LazerBase):
         return self._process
 
     @process.setter
-    def process(self, value: Optional[asyncio.subprocess.Process]) -> None:
+    def process(self, value: asyncio.subprocess.Process | None) -> None:
         self._process = value
 
     async def start(self) -> None:
@@ -422,11 +448,15 @@ class LazerAsync(LazerBase):
 
     async def calculate_difficulty(
         self,
-        mods: list[OsuMod],
-        beatmap_id: Optional[int] = None,
-        beatmap: Optional[TextIO] = None,
+        *,
+        beatmap_id: int | None = None,
+        beatmap: TextIO | None = None,
+        mods: list[OsuMod] | None = None,
     ) -> OsuDifficultyAttributes:
-        params = {"mods": [mod.value for mod in mods]}
+        if mods is not None:
+            params = {"mods": [mod.value for mod in mods]}
+        else:
+            params = {}
 
         if beatmap_id is not None:
             if beatmap is not None:
