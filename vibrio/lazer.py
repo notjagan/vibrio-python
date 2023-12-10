@@ -203,6 +203,19 @@ class Lazer(LazerBase):
         self.stop()
         return False
 
+    @staticmethod
+    def _status_error(response: requests.Response) -> ServerError:
+        if response.text:
+            return ServerError(
+                f"Unexpected status code {response.status_code}: {response.text}"
+            )
+        else:
+            return ServerError(f"Unexpected status code {response.status_code}")
+
+    @staticmethod
+    def _not_found_error(beatmap_id: int) -> BeatmapNotFound:
+        return BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+
     def has_beatmap(self, beatmap_id: int) -> bool:
         """Checks if given beatmap is cached/available locally."""
         with self.session.get(f"/api/beatmaps/{beatmap_id}/status") as response:
@@ -210,9 +223,7 @@ class Lazer(LazerBase):
                 return True
             elif response.status_code == 404:
                 return False
-            raise ServerError(
-                f"Unexpected status code {response.status_code}; check server logs for error details"
-            )
+            raise self._status_error(response)
 
     def get_beatmap(self, beatmap_id: int) -> BinaryIO:
         """Returns a file stream for the given beatmap."""
@@ -223,19 +234,15 @@ class Lazer(LazerBase):
                 stream.seek(0)
                 return stream
             elif response.status_code == 404:
-                raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+                raise self._not_found_error(beatmap_id)
             else:
-                raise ServerError(
-                    f"Unexpected status code {response.status_code}; check server logs for error details"
-                )
+                raise self._status_error(response)
 
     def clear_cache(self) -> None:
         """Clears beatmap cache (if applicable)."""
         with self.session.delete("/api/beatmaps/cache") as response:
             if response.status_code != 200:
-                raise ServerError(
-                    f"Unexpected status code {response.status_code}; check server logs for error details"
-                )
+                raise self._status_error(response)
 
     def calculate_difficulty(
         self,
@@ -244,44 +251,30 @@ class Lazer(LazerBase):
         beatmap: TextIO | None = None,
         mods: list[OsuMod] | None = None,
     ) -> OsuDifficultyAttributes:
+        params = {}
         if mods is not None:
-            params = {"mods": [mod.value for mod in mods]}
-        else:
-            params = {}
+            params["mods"] = [mod.value for mod in mods]
 
         if beatmap_id is not None:
             if beatmap is not None:
                 raise ValueError(
-                    "Exactly one of `beatmap_id` and `beatmap_data` should be set"
+                    "Exactly one of `beatmap_id` and `beatmap` should be set"
                 )
-
-            with self.session.get(
-                f"/api/difficulty/{beatmap_id}", params=params
-            ) as response:
-                if response.status_code == 200:
-                    return OsuDifficultyAttributes.from_dict(response.json())
-                elif response.status_code == 404:
-                    raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
-                else:
-                    raise ServerError(
-                        f"Unexpected status code {response.status_code}; check server logs for error details"
-                    )
-
+            response = self.session.get(f"/api/difficulty/{beatmap_id}", params=params)
         elif beatmap is not None:
-            with self.session.post(
+            response = self.session.post(
                 "/api/difficulty", params=params, files={"beatmap": beatmap}
-            ) as response:
-                if response.status_code == 200:
-                    return OsuDifficultyAttributes.from_dict(response.json())
-                else:
-                    raise ServerError(
-                        f"Unexpected status code {response.status_code}; check server logs for error details"
-                    )
-
-        else:
-            raise ValueError(
-                "Exactly one of `beatmap_id` and `beatmap_data` should be set"
             )
+        else:
+            raise ValueError("Exactly one of `beatmap_id` and `beatmap` should be set")
+
+        with response:
+            if response.status_code == 200:
+                return OsuDifficultyAttributes.from_dict(response.json())
+            elif response.status_code == 404 and beatmap_id is not None:
+                raise self._not_found_error(beatmap_id)
+            else:
+                raise self._status_error(response)
 
     def calculate_performance(
         self,
@@ -290,36 +283,37 @@ class Lazer(LazerBase):
         mods: list[OsuMod] | None = None,
         difficulty: OsuDifficultyAttributes | None = None,
         hit_stats: HitStatistics | None = None,
+        replay: BinaryIO | None = None,
     ) -> OsuPerformanceAttributes:
-        if beatmap_id is not None and hit_stats is not None:
-            params = hit_stats.to_dict()
-            if mods is not None:
-                params |= {"mods": [mod.value for mod in mods]}
-
-            with self.session.get(
-                f"/api/performance/{beatmap_id}", params=params
-            ) as response:
-                if response.status_code == 200:
-                    return OsuPerformanceAttributes.from_dict(response.json())
-                elif response.status_code == 404:
-                    raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
-                else:
-                    raise ServerError(
-                        f"Unexpected status code {response.status_code}; check server logs for error details"
-                    )
+        if beatmap_id is not None:
+            if hit_stats is not None:
+                params = hit_stats.to_dict()
+                if mods is not None:
+                    params["mods"] = [mod.value for mod in mods]
+                response = self.session.get(
+                    f"/api/performance/{beatmap_id}", params=params
+                )
+            elif replay is not None:
+                response = self.session.post(
+                    f"/api/performance/replay/{beatmap_id}", files={"replay": replay}
+                )
+            else:
+                raise ValueError
 
         elif difficulty is not None and hit_stats is not None:
             params = difficulty.to_dict() | hit_stats.to_dict()
-            with self.session.get(f"/api/performance", params=params) as response:
-                if response.status_code == 200:
-                    return OsuPerformanceAttributes.from_dict(response.json())
-                else:
-                    raise ServerError(
-                        f"Unexpected status code {response.status_code}; check server logs for error details"
-                    )
+            response = self.session.get(f"/api/performance", params=params)
 
         else:
             raise ValueError
+
+        with response:
+            if response.status_code == 200:
+                return OsuPerformanceAttributes.from_dict(response.json())
+            elif response.status_code == 404 and beatmap_id is not None:
+                raise self._not_found_error(beatmap_id)
+            else:
+                raise self._status_error(response)
 
 
 class LazerAsync(LazerBase):
@@ -461,7 +455,7 @@ class LazerAsync(LazerBase):
         if beatmap_id is not None:
             if beatmap is not None:
                 raise ValueError(
-                    "Exactly one of `beatmap_id` and `beatmap_data` should be set"
+                    "Exactly one of `beatmap_id` and `beatmap` should be set"
                 )
 
             async with self.session.get(
@@ -495,6 +489,4 @@ class LazerAsync(LazerBase):
                     )
 
         else:
-            raise ValueError(
-                "Exactly one of `beatmap_id` and `beatmap_data` should be set"
-            )
+            raise ValueError("Exactly one of `beatmap_id` and `beatmap` should be set")

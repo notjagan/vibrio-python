@@ -114,6 +114,7 @@ class PerformanceTestCase:
     beatmap_id: int
     mods: list[OsuMod]
     hit_stats: HitStatistics
+    replay_filename: str
     pp: float
 
 
@@ -124,12 +125,13 @@ class PerformanceTestCase:
             1001682,
             [OsuMod.HIDDEN, OsuMod.DOUBLE_TIME],
             HitStatistics(2019, 104, 0, 3, 3141),
+            "4429758207.osr",
             1304.35,
         )
     ],
 )
 class TestPerformance:
-    def test_calculate_performance_hitstat(self, test_case: PerformanceTestCase):
+    def test_calculate_performance_id_hitstat(self, test_case: PerformanceTestCase):
         with Lazer() as lazer:
             attributes = lazer.calculate_performance(
                 beatmap_id=test_case.beatmap_id,
@@ -145,5 +147,13 @@ class TestPerformance:
                     mods=test_case.mods, beatmap_id=test_case.beatmap_id
                 ),
                 hit_stats=test_case.hit_stats,
+            )
+            assert attributes.total == approx(test_case.pp, 0.05)
+
+    def test_calculate_performance_id_replay(self, test_case: PerformanceTestCase):
+        with Lazer() as lazer, open(RESOURCES_DIR / test_case.replay_filename, "rb") as replay:
+            attributes = lazer.calculate_performance(
+                beatmap_id=test_case.beatmap_id,
+                replay=replay,
             )
             assert attributes.total == approx(test_case.pp, 0.05)
