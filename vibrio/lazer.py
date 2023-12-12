@@ -14,7 +14,7 @@ import time
 import urllib.parse
 from abc import ABC
 from pathlib import Path
-from typing import Any, BinaryIO, TextIO
+from typing import Any, BinaryIO
 
 import aiohttp
 import psutil
@@ -91,12 +91,14 @@ class LazerBase(ABC):
         self.running = True
 
         if self.use_logging:
+            logging.basicConfig(level=logging.INFO)
             logging.info(f"Launching server on port {self.port}")
             self.log = tempfile.NamedTemporaryFile(delete=False)
 
     def _stop(self) -> None:
         if self.log is not None:
             logging.info(f"Server output logged at {self.log.file.name}")
+            print(self.log.file.name)
             self.log.close()
             self.log = None
 
@@ -116,7 +118,7 @@ class BaseUrlSession(requests.Session):
 class Lazer(LazerBase):
     """Synchronous implementation for interfacing with osu!lazer functionality."""
 
-    def __init__(self, port: int | None = None, use_logging: bool = True) -> None:
+    def __init__(self, *, port: int | None = None, use_logging: bool = True) -> None:
         super().__init__(port, use_logging)
 
         self.session = None
@@ -185,7 +187,7 @@ class Lazer(LazerBase):
             self.process = None
 
             if status != 0 and status != signal.SIGTERM:
-                raise SystemError(
+                logging.error(
                     f"Could not cleanly shutdown server subprocess; received return code {status}"
                 )
 
@@ -248,7 +250,7 @@ class Lazer(LazerBase):
         self,
         *,
         beatmap_id: int | None = None,
-        beatmap: TextIO | None = None,
+        beatmap: BinaryIO | None = None,
         mods: list[OsuMod] | None = None,
     ) -> OsuDifficultyAttributes:
         params = {}
@@ -282,6 +284,7 @@ class Lazer(LazerBase):
         beatmap_id: int | None = None,
         mods: list[OsuMod] | None = None,
         difficulty: OsuDifficultyAttributes | None = None,
+        beatmap: BinaryIO | None = None,
         hit_stats: HitStatistics | None = None,
         replay: BinaryIO | None = None,
     ) -> OsuPerformanceAttributes:
@@ -302,7 +305,23 @@ class Lazer(LazerBase):
 
         elif difficulty is not None and hit_stats is not None:
             params = difficulty.to_dict() | hit_stats.to_dict()
-            response = self.session.get(f"/api/performance", params=params)
+            response = self.session.get("/api/performance", params=params)
+
+        elif beatmap is not None:
+            if hit_stats is not None:
+                params = hit_stats.to_dict()
+                if mods is not None:
+                    params["mods"] = [mod.value for mod in mods]
+                response = self.session.post(
+                    "/api/performance", params=params, files={"beatmap": beatmap}
+                )
+            elif replay is not None:
+                response = self.session.post(
+                    "/api/performance/replay",
+                    files={"beatmap": beatmap, "replay": replay},
+                )
+            else:
+                raise ValueError
 
         else:
             raise ValueError
@@ -444,7 +463,7 @@ class LazerAsync(LazerBase):
         self,
         *,
         beatmap_id: int | None = None,
-        beatmap: TextIO | None = None,
+        beatmap: BinaryIO | None = None,
         mods: list[OsuMod] | None = None,
     ) -> OsuDifficultyAttributes:
         if mods is not None:
@@ -474,7 +493,7 @@ class LazerAsync(LazerBase):
             data = aiohttp.FormData()
             data.add_field(
                 "beatmap",
-                beatmap.read(),
+                beatmap,
                 content_type="multipart/form-data",
                 filename="beatmap",
             )

@@ -8,6 +8,7 @@ from vibrio import Lazer, LazerAsync
 from vibrio.types import HitStatistics, OsuMod
 
 RESOURCES_DIR = Path(__file__).absolute().parent / "resources"
+EPSILON = 1e-3
 
 pytest_plugins = ("pytest_asyncio",)
 
@@ -76,17 +77,17 @@ class TestDifficulty:
             attributes = lazer.calculate_difficulty(
                 mods=test_case.mods, beatmap_id=test_case.beatmap_id
             )
-            assert attributes.star_rating == approx(test_case.star_rating, 0.03)
+            assert attributes.star_rating == approx(test_case.star_rating, EPSILON)
             assert attributes.max_combo == test_case.max_combo
 
-    def test_calculate_difficulty_file(self, test_case: DifficultyTestCase):
+    def test_calculate_difficulty_beatmap(self, test_case: DifficultyTestCase):
         with Lazer() as lazer, open(
-            RESOURCES_DIR / test_case.beatmap_filename
+            RESOURCES_DIR / test_case.beatmap_filename, "rb"
         ) as beatmap:
             attributes = lazer.calculate_difficulty(
                 mods=test_case.mods, beatmap=beatmap
             )
-            assert attributes.star_rating == approx(test_case.star_rating, 0.03)
+            assert attributes.star_rating == approx(test_case.star_rating, EPSILON)
             assert attributes.max_combo == test_case.max_combo
 
     @pytest.mark.asyncio
@@ -95,23 +96,26 @@ class TestDifficulty:
             attributes = await lazer.calculate_difficulty(
                 mods=test_case.mods, beatmap_id=test_case.beatmap_id
             )
-            assert attributes.star_rating == approx(test_case.star_rating, 0.03)
+            assert attributes.star_rating == approx(test_case.star_rating, EPSILON)
             assert attributes.max_combo == test_case.max_combo
 
     @pytest.mark.asyncio
-    async def test_calculate_difficulty_file_async(self, test_case: DifficultyTestCase):
+    async def test_calculate_difficulty_beatmap_async(
+        self, test_case: DifficultyTestCase
+    ):
         async with LazerAsync() as lazer:
-            with open(RESOURCES_DIR / test_case.beatmap_filename) as beatmap:
+            with open(RESOURCES_DIR / test_case.beatmap_filename, "rb") as beatmap:
                 attributes = await lazer.calculate_difficulty(
                     mods=test_case.mods, beatmap=beatmap
                 )
-            assert attributes.star_rating == approx(test_case.star_rating, 0.03)
+            assert attributes.star_rating == approx(test_case.star_rating, EPSILON)
             assert attributes.max_combo == test_case.max_combo
 
 
 @dataclass
 class PerformanceTestCase:
     beatmap_id: int
+    beatmap_filename: str
     mods: list[OsuMod]
     hit_stats: HitStatistics
     replay_filename: str
@@ -123,8 +127,11 @@ class PerformanceTestCase:
     [
         PerformanceTestCase(
             1001682,
+            "1001682.osu",
             [OsuMod.HIDDEN, OsuMod.DOUBLE_TIME],
-            HitStatistics(2019, 104, 0, 3, 3141),
+            HitStatistics(
+                count_300=2019, count_100=104, count_50=0, count_miss=3, combo=3141
+            ),
             "4429758207.osr",
             1304.35,
         )
@@ -138,7 +145,20 @@ class TestPerformance:
                 mods=test_case.mods,
                 hit_stats=test_case.hit_stats,
             )
-            assert attributes.total == approx(test_case.pp, 0.05)
+            assert attributes.total == approx(test_case.pp, EPSILON)
+
+    def test_calculate_performance_beatmap_hitstat(
+        self, test_case: PerformanceTestCase
+    ):
+        with Lazer() as lazer, open(
+            RESOURCES_DIR / test_case.beatmap_filename, "rb"
+        ) as beatmap:
+            attributes = lazer.calculate_performance(
+                beatmap=beatmap,
+                mods=test_case.mods,
+                hit_stats=test_case.hit_stats,
+            )
+            assert attributes.total == approx(test_case.pp, EPSILON)
 
     def test_calculate_performance_difficulty(self, test_case: PerformanceTestCase):
         with Lazer() as lazer:
@@ -148,12 +168,24 @@ class TestPerformance:
                 ),
                 hit_stats=test_case.hit_stats,
             )
-            assert attributes.total == approx(test_case.pp, 0.05)
+            assert attributes.total == approx(test_case.pp, EPSILON)
 
     def test_calculate_performance_id_replay(self, test_case: PerformanceTestCase):
-        with Lazer() as lazer, open(RESOURCES_DIR / test_case.replay_filename, "rb") as replay:
+        with Lazer() as lazer, open(
+            RESOURCES_DIR / test_case.replay_filename, "rb"
+        ) as replay:
             attributes = lazer.calculate_performance(
                 beatmap_id=test_case.beatmap_id,
                 replay=replay,
             )
-            assert attributes.total == approx(test_case.pp, 0.05)
+            assert attributes.total == approx(test_case.pp, EPSILON)
+
+    def test_calculate_performance_beatmap_replay(self, test_case: PerformanceTestCase):
+        with Lazer(use_logging=True) as lazer, open(
+            RESOURCES_DIR / test_case.beatmap_filename, "rb"
+        ) as beatmap, open(RESOURCES_DIR / test_case.replay_filename, "rb") as replay:
+            attributes = lazer.calculate_performance(
+                beatmap=beatmap,
+                replay=replay,
+            )
+            assert attributes.total == approx(test_case.pp, EPSILON)
