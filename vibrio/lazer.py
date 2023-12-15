@@ -4,16 +4,17 @@ import asyncio
 import atexit
 import io
 import logging
+import os
 import platform
 import signal
 import socket
 import subprocess
-import tempfile
+import threading
 import time
 import urllib.parse
 from abc import ABC
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import IO, Any, BinaryIO, Callable
 
 import aiohttp
 import psutil
@@ -46,7 +47,8 @@ def find_open_port() -> int:
     """Returns a port not currently in use on the system."""
     with socket.socket() as sock:
         sock.bind(("", 0))
-        return sock.getsockname()[1]
+        _, port = sock.getsockname()
+        return port
 
 
 def get_vibrio_path(platform: str) -> Path:
@@ -59,24 +61,50 @@ def get_vibrio_path(platform: str) -> Path:
     return PACKAGE_DIR / "lib" / f"Vibrio{suffix}"
 
 
+class LogPipe(IO[str]):
+    """IO wrapper around a thread for piping output to log function."""
+
+    def __init__(self, log_func: Callable[[str], None]) -> None:
+        self.log_func = log_func
+        self.fd_read, self.fd_write = os.pipe()
+
+        class LogThread(threading.Thread):
+            def run(_self) -> None:
+                with os.fdopen(self.fd_read) as pipe_reader:
+                    for line in iter(pipe_reader.readline, ""):
+                        self.log_func(line.strip("\n"))
+
+        self.thread = LogThread()
+        self.thread.daemon = True
+        self.thread.start()
+
+    def fileno(self) -> int:
+        return self.fd_write
+
+    def close(self) -> None:
+        os.close(self.fd_write)
+
+
 class LazerBase(ABC):
     """Shared functionality for lazer wrappers."""
 
     STARTUP_DELAY = 0.05  # Amount of time (seconds) between requests during startup
 
-    def __init__(self, port: int | None = None, use_logging: bool = True) -> None:
+    def __init__(
+        self, *, port: int | None = None, log_level: logging._Level = logging.NOTSET
+    ) -> None:
         if port is None:
             self.port = find_open_port()
         else:
             self.port = port
-        self.use_logging = use_logging
         self.running = False
 
         self.server_path = get_vibrio_path(platform.system())
         if not self.server_path.exists():
-            raise FileNotFoundError(f'No executable found at "{self.server_path}".')
+            raise FileNotFoundError(f'No executable found at "{self.server_path}"')
 
-        self.log: tempfile._TemporaryFileWrapper[bytes] | None = None
+        self.logger = logging.getLogger(str(id(self)))
+        self.logger.setLevel(log_level)
 
     def address(self) -> str:
         """Constructs the base URL for the web server."""
@@ -87,18 +115,7 @@ class LazerBase(ABC):
             raise ServerStateError("Server is already running")
         self.running = True
 
-        if self.use_logging:
-            logging.basicConfig(level=logging.INFO)
-            logging.info(f"Launching server on port {self.port}")
-            self.log = tempfile.NamedTemporaryFile(delete=False)
-
-    def _stop(self) -> None:
-        if self.log is not None:
-            logging.info(f"Server output logged at {self.log.file.name}")
-            self.log.close()
-            self.log = None
-
-        self.running = False
+        self.logger.info(f"Hosting server on port {self.port}.")
 
     @staticmethod
     def _not_found_error(beatmap_id: int) -> BeatmapNotFound:
@@ -120,8 +137,10 @@ class BaseUrlSession(requests.Session):
 class Lazer(LazerBase):
     """Synchronous implementation for interfacing with osu!lazer functionality."""
 
-    def __init__(self, *, port: int | None = None, use_logging: bool = True) -> None:
-        super().__init__(port, use_logging)
+    def __init__(
+        self, *, port: int | None = None, log_level: logging._Level = logging.NOTSET
+    ) -> None:
+        super().__init__(port=port, log_level=log_level)
 
         self.session = None
         self.process = None
@@ -150,15 +169,10 @@ class Lazer(LazerBase):
         """Launches server executable."""
         self._start()
 
-        if self.log is not None:
-            out = self.log
-        else:
-            out = subprocess.DEVNULL
-
         self.process = subprocess.Popen(
             [self.server_path, "--urls", self.address()],
-            stdout=out,
-            stderr=out,
+            stdout=LogPipe(self.logger.info),
+            stderr=LogPipe(self.logger.error),
         )
 
         self.session = BaseUrlSession(self.address())
@@ -178,8 +192,10 @@ class Lazer(LazerBase):
 
     def stop(self) -> None:
         """Cleans up server executable."""
-        self._stop()
+        if not self.running:
+            return
 
+        self.logger.info(f"Shutting down server...")
         try:
             parent = psutil.Process(self.process.pid)
             for child in parent.children(recursive=True):
@@ -189,12 +205,15 @@ class Lazer(LazerBase):
             self.process = None
 
             if status != 0 and status != signal.SIGTERM:
-                logging.error(
+                self.logger.error(
                     f"Could not cleanly shutdown server subprocess; received return code {status}"
                 )
 
             self.session.close()
             self.session = None
+
+            self.running = False
+            self.logger.info("Server closed.")
 
         except ServerStateError:
             pass
@@ -336,8 +355,10 @@ class Lazer(LazerBase):
 class LazerAsync(LazerBase):
     """Asynchronous implementation for interfacing with osu!lazer functionality."""
 
-    def __init__(self, port: int | None = None, use_logging: bool = True) -> None:
-        super().__init__(port, use_logging)
+    def __init__(
+        self, *, port: int | None = None, log_level: logging._Level = logging.NOTSET
+    ) -> None:
+        super().__init__(port=port, log_level=log_level)
 
         self.session = None
         self.process = None
@@ -366,15 +387,10 @@ class LazerAsync(LazerBase):
         """Launches server executable."""
         self._start()
 
-        if self.log is not None:
-            out = self.log
-        else:
-            out = subprocess.DEVNULL
-
         self.process = await asyncio.create_subprocess_shell(
             f"{self.server_path} --urls {self.address()}",
-            stdout=out,
-            stderr=out,
+            stdout=LogPipe(self.logger.info),
+            stderr=LogPipe(self.logger.error),
         )
 
         self.session = aiohttp.ClientSession(self.address())
@@ -394,8 +410,10 @@ class LazerAsync(LazerBase):
 
     async def stop(self) -> None:
         """Cleans up server executable."""
-        self._stop()
+        if not self.running:
+            return
 
+        self.logger.info(f"Shutting down server...")
         try:
             parent = psutil.Process(self.process.pid)
             for child in parent.children(recursive=True):
@@ -404,13 +422,16 @@ class LazerAsync(LazerBase):
             status = await self.process.wait()
             self.process = None
 
+            if status != 0 and status != signal.SIGTERM:
+                self.logger.error(
+                    f"Could not cleanly shutdown server subprocess; received return code {status}"
+                )
+
             await self.session.close()
             self.session = None
 
-            if status != 0 and status != signal.SIGTERM:
-                raise SystemError(
-                    f"Could not cleanly shutdown server subprocess; received return code {status}"
-                )
+            self.running = False
+            self.logger.info("Server closed.")
 
         except ServerStateError:
             pass

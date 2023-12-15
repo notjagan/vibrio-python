@@ -189,7 +189,7 @@ class TestPerformance:
             assert attributes.total == approx(test_case.pp, EPSILON)
 
     def test_calculate_performance_beatmap_replay(self, test_case: PerformanceTestCase):
-        with Lazer(use_logging=True) as lazer, open(
+        with Lazer() as lazer, open(
             RESOURCES_DIR / test_case.beatmap_filename, "rb"
         ) as beatmap, open(RESOURCES_DIR / test_case.replay_filename, "rb") as replay:
             attributes = lazer.calculate_performance(
@@ -252,7 +252,7 @@ class TestPerformance:
     async def test_calculate_performance_beatmap_replay_async(
         self, test_case: PerformanceTestCase
     ):
-        async with LazerAsync(use_logging=True) as lazer:
+        async with LazerAsync() as lazer:
             with open(
                 RESOURCES_DIR / test_case.beatmap_filename, "rb"
             ) as beatmap, open(
