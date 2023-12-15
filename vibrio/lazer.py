@@ -106,6 +106,9 @@ class LazerBase(ABC):
         self.logger = logging.getLogger(str(id(self)))
         self.logger.setLevel(log_level)
 
+        self.info_pipe: LogPipe | None
+        self.error_pipe: LogPipe | None
+
     def address(self) -> str:
         """Constructs the base URL for the web server."""
         return f"http://localhost:{self.port}"
@@ -115,7 +118,17 @@ class LazerBase(ABC):
             raise ServerStateError("Server is already running")
         self.running = True
 
+        self.info_pipe = LogPipe(self.logger.info)
+        self.error_pipe = LogPipe(self.logger.error)
+
         self.logger.info(f"Hosting server on port {self.port}.")
+
+    def _stop(self) -> None:
+        self.logger.info(f"Shutting down server...")
+        if self.info_pipe is not None:
+            self.info_pipe.close()
+        if self.error_pipe is not None:
+            self.error_pipe.close()
 
     @staticmethod
     def _not_found_error(beatmap_id: int) -> BeatmapNotFound:
@@ -171,8 +184,8 @@ class Lazer(LazerBase):
 
         self.process = subprocess.Popen(
             [self.server_path, "--urls", self.address()],
-            stdout=LogPipe(self.logger.info),
-            stderr=LogPipe(self.logger.error),
+            stdout=self.info_pipe,
+            stderr=self.error_pipe,
         )
 
         self.session = BaseUrlSession(self.address())
@@ -194,29 +207,25 @@ class Lazer(LazerBase):
         """Cleans up server executable."""
         if not self.running:
             return
+        self._stop()
 
-        self.logger.info(f"Shutting down server...")
-        try:
-            parent = psutil.Process(self.process.pid)
-            for child in parent.children(recursive=True):
-                child.terminate()
-            parent.terminate()
-            status = self.process.wait()
-            self.process = None
+        parent = psutil.Process(self.process.pid)
+        for child in parent.children(recursive=True):
+            child.terminate()
+        parent.terminate()
+        status = self.process.wait()
+        self.process = None
 
-            if status != 0 and status != signal.SIGTERM:
-                self.logger.error(
-                    f"Could not cleanly shutdown server subprocess; received return code {status}"
-                )
+        if status != 0 and status != signal.SIGTERM:
+            self.logger.error(
+                f"Could not cleanly shutdown server subprocess; received return code {status}"
+            )
 
-            self.session.close()
-            self.session = None
+        self.session.close()
+        self.session = None
 
-            self.running = False
-            self.logger.info("Server closed.")
-
-        except ServerStateError:
-            pass
+        self.running = False
+        self.logger.info("Server closed.")
 
     def __enter__(self) -> Self:
         self.start()
@@ -389,8 +398,8 @@ class LazerAsync(LazerBase):
 
         self.process = await asyncio.create_subprocess_shell(
             f"{self.server_path} --urls {self.address()}",
-            stdout=LogPipe(self.logger.info),
-            stderr=LogPipe(self.logger.error),
+            stdout=self.info_pipe,
+            stderr=self.error_pipe,
         )
 
         self.session = aiohttp.ClientSession(self.address())
@@ -412,29 +421,25 @@ class LazerAsync(LazerBase):
         """Cleans up server executable."""
         if not self.running:
             return
+        self._stop()
 
-        self.logger.info(f"Shutting down server...")
-        try:
-            parent = psutil.Process(self.process.pid)
-            for child in parent.children(recursive=True):
-                child.terminate()
-            parent.terminate()
-            status = await self.process.wait()
-            self.process = None
+        parent = psutil.Process(self.process.pid)
+        for child in parent.children(recursive=True):
+            child.terminate()
+        parent.terminate()
+        status = await self.process.wait()
+        self.process = None
 
-            if status != 0 and status != signal.SIGTERM:
-                self.logger.error(
-                    f"Could not cleanly shutdown server subprocess; received return code {status}"
-                )
+        if status != 0 and status != signal.SIGTERM:
+            self.logger.error(
+                f"Could not cleanly shutdown server subprocess; received return code {status}"
+            )
 
-            await self.session.close()
-            self.session = None
+        await self.session.close()
+        self.session = None
 
-            self.running = False
-            self.logger.info("Server closed.")
-
-        except ServerStateError:
-            pass
+        self.running = False
+        self.logger.info("Server closed.")
 
     async def __aenter__(self) -> Self:
         await self.start()
