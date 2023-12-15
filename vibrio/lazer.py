@@ -7,7 +7,6 @@ import logging
 import platform
 import signal
 import socket
-import stat
 import subprocess
 import tempfile
 import time
@@ -76,7 +75,6 @@ class LazerBase(ABC):
         self.server_path = get_vibrio_path(platform.system())
         if not self.server_path.exists():
             raise FileNotFoundError(f'No executable found at "{self.server_path}".')
-        self.server_path.chmod(self.server_path.stat().st_mode | stat.S_IEXEC)
 
         self.log: tempfile._TemporaryFileWrapper[bytes] | None = None
 
@@ -87,7 +85,6 @@ class LazerBase(ABC):
     def _start(self) -> None:
         if self.running:
             raise ServerStateError("Server is already running")
-
         self.running = True
 
         if self.use_logging:
@@ -98,9 +95,10 @@ class LazerBase(ABC):
     def _stop(self) -> None:
         if self.log is not None:
             logging.info(f"Server output logged at {self.log.file.name}")
-            print(self.log.file.name)
             self.log.close()
             self.log = None
+
+        self.running = False
 
     @staticmethod
     def _not_found_error(beatmap_id: int) -> BeatmapNotFound:
