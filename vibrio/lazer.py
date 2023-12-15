@@ -102,6 +102,10 @@ class LazerBase(ABC):
             self.log.close()
             self.log = None
 
+    @staticmethod
+    def _not_found_error(beatmap_id: int) -> BeatmapNotFound:
+        return BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+
 
 class BaseUrlSession(requests.Session):
     def __init__(self, base_url: str) -> None:
@@ -214,10 +218,6 @@ class Lazer(LazerBase):
         else:
             return ServerError(f"Unexpected status code {response.status_code}")
 
-    @staticmethod
-    def _not_found_error(beatmap_id: int) -> BeatmapNotFound:
-        return BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
-
     def has_beatmap(self, beatmap_id: int) -> bool:
         """Checks if given beatmap is cached/available locally."""
         with self.session.get(f"/api/beatmaps/{beatmap_id}/status") as response:
@@ -282,9 +282,9 @@ class Lazer(LazerBase):
         self,
         *,
         beatmap_id: int | None = None,
+        beatmap: BinaryIO | None = None,
         mods: list[OsuMod] | None = None,
         difficulty: OsuDifficultyAttributes | None = None,
-        beatmap: BinaryIO | None = None,
         hit_stats: HitStatistics | None = None,
         replay: BinaryIO | None = None,
     ) -> OsuPerformanceAttributes:
@@ -303,10 +303,6 @@ class Lazer(LazerBase):
             else:
                 raise ValueError
 
-        elif difficulty is not None and hit_stats is not None:
-            params = difficulty.to_dict() | hit_stats.to_dict()
-            response = self.session.get("/api/performance", params=params)
-
         elif beatmap is not None:
             if hit_stats is not None:
                 params = hit_stats.to_dict()
@@ -322,6 +318,10 @@ class Lazer(LazerBase):
                 )
             else:
                 raise ValueError
+
+        elif difficulty is not None and hit_stats is not None:
+            params = difficulty.to_dict() | hit_stats.to_dict()
+            response = self.session.get("/api/performance", params=params)
 
         else:
             raise ValueError
@@ -425,6 +425,16 @@ class LazerAsync(LazerBase):
         await self.stop()
         return False
 
+    @staticmethod
+    async def _status_error(response: aiohttp.ClientResponse) -> ServerError:
+        text = await response.text()
+        if text:
+            return ServerError(
+                f"Unexpected status code {response.status}: {response.text}"
+            )
+        else:
+            return ServerError(f"Unexpected status code {response.status}")
+
     async def has_beatmap(self, beatmap_id: int) -> bool:
         """Checks if given beatmap is cached/available locally."""
         async with self.session.get(f"/api/beatmaps/{beatmap_id}/status") as response:
@@ -432,9 +442,7 @@ class LazerAsync(LazerBase):
                 return True
             elif response.status == 404:
                 return False
-            raise ServerError(
-                f"Unexpected status code {response.status}; check server logs for error details"
-            )
+            raise await self._status_error(response)
 
     async def get_beatmap(self, beatmap_id: int) -> BinaryIO:
         """Returns a file stream for the given beatmap."""
@@ -445,19 +453,15 @@ class LazerAsync(LazerBase):
                 stream.seek(0)
                 return stream
             elif response.status == 404:
-                raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
+                raise self._not_found_error(beatmap_id)
             else:
-                raise ServerError(
-                    f"Unexpected status code {response.status}; check server logs for error details"
-                )
+                raise await self._status_error(response)
 
     async def clear_cache(self) -> None:
         """Clears beatmap cache (if applicable)."""
         async with self.session.delete("/api/beatmaps/cache") as response:
             if response.status != 200:
-                raise ServerError(
-                    f"Unexpected status code {response.status}; check server logs for error details"
-                )
+                raise await self._status_error(response)
 
     async def calculate_difficulty(
         self,
@@ -466,46 +470,85 @@ class LazerAsync(LazerBase):
         beatmap: BinaryIO | None = None,
         mods: list[OsuMod] | None = None,
     ) -> OsuDifficultyAttributes:
+        params = {}
         if mods is not None:
-            params = {"mods": [mod.value for mod in mods]}
-        else:
-            params = {}
+            params["mods"] = [mod.value for mod in mods]
 
         if beatmap_id is not None:
             if beatmap is not None:
                 raise ValueError(
                     "Exactly one of `beatmap_id` and `beatmap` should be set"
                 )
-
-            async with self.session.get(
+            response = await self.session.get(
                 f"/api/difficulty/{beatmap_id}", params=params
-            ) as response:
-                if response.status == 200:
-                    return OsuDifficultyAttributes.from_dict(await response.json())
-                elif response.status == 404:
-                    raise BeatmapNotFound(f"No beatmap found for id {beatmap_id}")
-                else:
-                    raise ServerError(
-                        f"Unexpected status code {response.status}; check server logs for error details"
-                    )
-
-        elif beatmap is not None:
-            data = aiohttp.FormData()
-            data.add_field(
-                "beatmap",
-                beatmap,
-                content_type="multipart/form-data",
-                filename="beatmap",
             )
-            async with self.session.post(
-                "/api/difficulty", params=params, data=data
-            ) as response:
-                if response.status == 200:
-                    return OsuDifficultyAttributes.from_dict(await response.json())
-                else:
-                    raise ServerError(
-                        f"Unexpected status code {response.status}; check server logs for error details"
-                    )
-
+        elif beatmap is not None:
+            response = await self.session.post(
+                "/api/difficulty", params=params, data={"beatmap": beatmap}
+            )
         else:
             raise ValueError("Exactly one of `beatmap_id` and `beatmap` should be set")
+
+        async with response:
+            if response.status == 200:
+                return OsuDifficultyAttributes.from_dict(await response.json())
+            elif response.status == 404 and beatmap_id is not None:
+                raise self._not_found_error(beatmap_id)
+            else:
+                raise await self._status_error(response)
+
+    async def calculate_performance(
+        self,
+        *,
+        beatmap_id: int | None = None,
+        beatmap: BinaryIO | None = None,
+        mods: list[OsuMod] | None = None,
+        difficulty: OsuDifficultyAttributes | None = None,
+        hit_stats: HitStatistics | None = None,
+        replay: BinaryIO | None = None,
+    ) -> OsuPerformanceAttributes:
+        if beatmap_id is not None:
+            if hit_stats is not None:
+                params = hit_stats.to_dict()
+                if mods is not None:
+                    params["mods"] = [mod.value for mod in mods]
+                response = await self.session.get(
+                    f"/api/performance/{beatmap_id}", params=params
+                )
+            elif replay is not None:
+                response = await self.session.post(
+                    f"/api/performance/replay/{beatmap_id}", data={"replay": replay}
+                )
+            else:
+                raise ValueError
+
+        elif beatmap is not None:
+            if hit_stats is not None:
+                params = hit_stats.to_dict()
+                if mods is not None:
+                    params["mods"] = [mod.value for mod in mods]
+                response = await self.session.post(
+                    "/api/performance", params=params, data={"beatmap": beatmap}
+                )
+            elif replay is not None:
+                response = await self.session.post(
+                    "/api/performance/replay",
+                    data={"beatmap": beatmap, "replay": replay},
+                )
+            else:
+                raise ValueError
+
+        elif difficulty is not None and hit_stats is not None:
+            params = difficulty.to_dict() | hit_stats.to_dict()
+            response = await self.session.get("/api/performance", params=params)
+
+        else:
+            raise ValueError
+
+        async with response:
+            if response.status == 200:
+                return OsuPerformanceAttributes.from_dict(await response.json())
+            elif response.status == 404 and beatmap_id is not None:
+                raise self._not_found_error(beatmap_id)
+            else:
+                raise await self._status_error(response)

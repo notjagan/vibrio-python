@@ -69,7 +69,15 @@ class DifficultyTestCase:
 
 @pytest.mark.parametrize(
     "test_case",
-    [DifficultyTestCase(1001682, "1001682.osu", [OsuMod.DOUBLE_TIME], 9.7, 3220)],
+    [
+        DifficultyTestCase(
+            beatmap_id=1001682,
+            beatmap_filename="1001682.osu",
+            mods=[OsuMod.DOUBLE_TIME],
+            star_rating=9.7,
+            max_combo=3220,
+        )
+    ],
 )
 class TestDifficulty:
     def test_calculate_difficulty_id(self, test_case: DifficultyTestCase):
@@ -126,14 +134,14 @@ class PerformanceTestCase:
     "test_case",
     [
         PerformanceTestCase(
-            1001682,
-            "1001682.osu",
-            [OsuMod.HIDDEN, OsuMod.DOUBLE_TIME],
-            HitStatistics(
+            beatmap_id=1001682,
+            beatmap_filename="1001682.osu",
+            mods=[OsuMod.HIDDEN, OsuMod.DOUBLE_TIME],
+            hit_stats=HitStatistics(
                 count_300=2019, count_100=104, count_50=0, count_miss=3, combo=3141
             ),
-            "4429758207.osr",
-            1304.35,
+            replay_filename="4429758207.osr",
+            pp=1304.35,
         )
     ],
 )
@@ -189,3 +197,69 @@ class TestPerformance:
                 replay=replay,
             )
             assert attributes.total == approx(test_case.pp, EPSILON)
+
+    @pytest.mark.asyncio
+    async def test_calculate_performance_id_hitstat_async(
+        self, test_case: PerformanceTestCase
+    ):
+        async with LazerAsync() as lazer:
+            attributes = await lazer.calculate_performance(
+                beatmap_id=test_case.beatmap_id,
+                mods=test_case.mods,
+                hit_stats=test_case.hit_stats,
+            )
+            assert attributes.total == approx(test_case.pp, EPSILON)
+
+    @pytest.mark.asyncio
+    async def test_calculate_performance_beatmap_hitstat_async(
+        self, test_case: PerformanceTestCase
+    ):
+        async with LazerAsync() as lazer:
+            with open(RESOURCES_DIR / test_case.beatmap_filename, "rb") as beatmap:
+                attributes = await lazer.calculate_performance(
+                    beatmap=beatmap,
+                    mods=test_case.mods,
+                    hit_stats=test_case.hit_stats,
+                )
+                assert attributes.total == approx(test_case.pp, EPSILON)
+
+    @pytest.mark.asyncio
+    async def test_calculate_performance_difficulty_async(
+        self, test_case: PerformanceTestCase
+    ):
+        async with LazerAsync() as lazer:
+            attributes = await lazer.calculate_performance(
+                difficulty=await lazer.calculate_difficulty(
+                    mods=test_case.mods, beatmap_id=test_case.beatmap_id
+                ),
+                hit_stats=test_case.hit_stats,
+            )
+            assert attributes.total == approx(test_case.pp, EPSILON)
+
+    @pytest.mark.asyncio
+    async def test_calculate_performance_id_replay_async(
+        self, test_case: PerformanceTestCase
+    ):
+        async with LazerAsync() as lazer:
+            with open(RESOURCES_DIR / test_case.replay_filename, "rb") as replay:
+                attributes = await lazer.calculate_performance(
+                    beatmap_id=test_case.beatmap_id,
+                    replay=replay,
+                )
+                assert attributes.total == approx(test_case.pp, EPSILON)
+
+    @pytest.mark.asyncio
+    async def test_calculate_performance_beatmap_replay_async(
+        self, test_case: PerformanceTestCase
+    ):
+        async with LazerAsync(use_logging=True) as lazer:
+            with open(
+                RESOURCES_DIR / test_case.beatmap_filename, "rb"
+            ) as beatmap, open(
+                RESOURCES_DIR / test_case.replay_filename, "rb"
+            ) as replay:
+                attributes = await lazer.calculate_performance(
+                    beatmap=beatmap,
+                    replay=replay,
+                )
+                assert attributes.total == approx(test_case.pp, EPSILON)
