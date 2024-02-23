@@ -1,3 +1,7 @@
+"""
+Custom types used with :class:`~vibrio.Lazer` and :class:`~vibrio.LazerAsync`.
+"""
+
 from abc import ABC
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
@@ -71,15 +75,10 @@ class HitStatistics(SerializableDataclass):
     """Dataclass representing an osu! play in terms of individual hit statistics."""
 
     count_300: int
-    """The number of 300s in the play."""
     count_100: int
-    """The number of 100s in the play."""
     count_50: int
-    """The number of 50s in the play."""
     count_miss: int
-    """The number of misses in the play."""
     combo: int
-    """The maximum combo of the play."""
 
 
 @dataclass

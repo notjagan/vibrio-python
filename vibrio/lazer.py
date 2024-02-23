@@ -1,3 +1,8 @@
+"""
+Module for interacting with osu!lazer functionality (see :class:`Lazer`,
+:class:`LazerAsync`).
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -161,6 +166,13 @@ class BaseUrlSession(requests.Session):
     def request(
         self, method: str | bytes, url: str | bytes, *args: Any, **kwargs: Any
     ) -> requests.Response:
+        """
+        Makes a request using the currently stored base URL.
+
+        See Also
+        --------
+        requests.Session.request
+        """
         full_url = urllib.parse.urljoin(self.base_url, str(url))
         return super().request(method, full_url, *args, **kwargs)
 
@@ -372,7 +384,7 @@ class Lazer(LazerBase):
         ----------
         beatmap_id : int, optional
         beatmap : binary file stream, optional
-        mods: list of OsuMod enums, optional
+        mods : list of OsuMod enums, optional
 
         Returns
         -------
@@ -509,6 +521,7 @@ class LazerAsync(LazerBase):
     --------
     Note: the following example would not execute in a REPL environment as async
     statements must occur within async functions, but the principle still holds.
+
     >>> from vibrio import HitStatistics, Lazer, OsuMod
     >>> async with Lazer() as lazer:
     ...     attributes = await lazer.calculate_performance(
@@ -706,7 +719,7 @@ class LazerAsync(LazerBase):
         ----------
         beatmap_id : int, optional
         beatmap : binary file stream, optional
-        mods: list of OsuMod enums, optional
+        mods : list of OsuMod enums, optional
 
         Returns
         -------
