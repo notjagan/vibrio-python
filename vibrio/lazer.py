@@ -31,8 +31,11 @@ from vibrio.types import (
 PACKAGE_DIR = Path(__file__).absolute().parent
 
 
-class ServerStateError(Exception):
-    """Exception due to attempting to induce an invalid server state transition."""
+class StateError(Exception):
+    """
+    Exception due to attempting to induce an invalid state transition e.g. attempting to
+    launch the server when an instance is already tied to the current object.
+    """
 
 
 class ServerError(Exception):
@@ -86,20 +89,28 @@ class LogPipe(IO[str]):
 
 
 class LazerBase(ABC):
-    """Shared functionality for lazer wrappers."""
+    """Abstract base class for `Lazer` and `LazerAsync`."""
 
     STARTUP_DELAY = 0.05
-    """Amount of time (seconds) between requests during startup"""
+    """Amount of time (seconds) between requests during startup."""
 
     def __init__(
-        self, *, port: int | None = None, log_level: logging._Level = logging.NOTSET
+        self,
+        *,
+        port: int | None = None,
+        self_hosted: bool = False,
+        log_level: logging._Level = logging.NOTSET,
     ) -> None:
+        self.self_hosted = self_hosted
+        if self.self_hosted and port is None:
+            raise ValueError("`port` must be provided if self-hosting")
+
         if port is None:
             self.port = find_open_port()
         else:
             self.port = port
 
-        self.running = False
+        self.connected = False
         self._server_path = get_vibrio_path(platform.system())
         if not self._server_path.exists():
             raise FileNotFoundError(f'No executable found at "{self._server_path}"')
@@ -119,17 +130,17 @@ class LazerBase(ABC):
         return f"http://localhost:{self.port}"
 
     def _start(self) -> None:
-        if self.running:
-            raise ServerStateError("Server is already running")
-        self.running = True
+        if self.connected:
+            raise StateError("Already connected to server")
 
         self._info_pipe = LogPipe(self._logger.info)
         self._error_pipe = LogPipe(self._logger.error)
 
-        self._logger.info(f"Hosting server on port {self.port}.")
+        if not self.self_hosted:
+            self._logger.info(f"Hosting server on port {self.port}.")
 
     def _stop(self) -> None:
-        self._logger.info("Shutting down server...")
+        self._logger.info("Shutting down...")
         if self._info_pipe is not None:
             self._info_pipe.close()
         if self._error_pipe is not None:
@@ -142,6 +153,7 @@ class LazerBase(ABC):
 
 class BaseUrlSession(requests.Session):
     """Request session with a base URL as used internally in `Lazer`."""
+
     def __init__(self, base_url: str) -> None:
         super().__init__()
         self.base_url = base_url
@@ -159,11 +171,7 @@ class Lazer(LazerBase):
 
     Attributes
     ----------
-    session
-    process
-    port : int
-    log_level : logging level
-    running : bool
+    connected : bool
         Whether the class instance is currently connected to a server.
 
     Examples
@@ -195,7 +203,11 @@ class Lazer(LazerBase):
     """
 
     def __init__(
-        self, *, port: int | None = None, log_level: logging._Level = logging.NOTSET
+        self,
+        *,
+        port: int | None = None,
+        self_hosted: bool = False,
+        log_level: logging._Level = logging.NOTSET,
     ) -> None:
         """
         Constructs a `Lazer` instance.
@@ -210,6 +222,9 @@ class Lazer(LazerBase):
         port : int, optional
             Port to run/connect to the server on. Automatically generates an unused
             port if left unset.
+        self_hosted : bool, default False
+            Whether the user is hosting their own server instance. Requires
+            specification of a port if set to `True`.
         log_level : logging level, default `logging.NOTSET`
             Mininum severity level for logging, as found in the `logging` standard
             library.
@@ -218,7 +233,7 @@ class Lazer(LazerBase):
         -------
         Lazer
         """
-        super().__init__(port=port, log_level=log_level)
+        super().__init__(port=port, self_hosted=self_hosted, log_level=log_level)
 
         self.session = None
         self.process = None
@@ -227,7 +242,7 @@ class Lazer(LazerBase):
     def session(self) -> BaseUrlSession:
         """Request session; errors if unset."""
         if self._session is None:
-            raise ServerStateError("Session has not been initialized")
+            raise StateError("Session has not been initialized")
         return self._session
 
     @session.setter
@@ -238,7 +253,7 @@ class Lazer(LazerBase):
     def process(self) -> subprocess.Popen[bytes]:
         """Executable process; errors if unset."""
         if self._process is None:
-            raise ServerStateError("Process has not been initialized")
+            raise StateError("Process has not been initialized")
         return self._process
 
     @process.setter
@@ -249,51 +264,50 @@ class Lazer(LazerBase):
         """Launches and connects to `vibrio` server executable."""
         self._start()
 
-        self.process = subprocess.Popen(
-            self.args(),
-            stdout=self._info_pipe,
-            stderr=self._error_pipe,
-        )
+        if not self.self_hosted:
+            self.process = subprocess.Popen(
+                self.args(),
+                stdout=self._info_pipe,
+                stderr=self._error_pipe,
+            )
 
         self.session = BaseUrlSession(self.address())
-
-        # block until webserver has launched
-        while True:
+        while True:  # block until webserver has launched
             try:
                 with self.session.get("/api/status") as response:
                     if response.status_code == 200:
                         break
             except (ConnectionError, IOError):
-                pass
-            finally:
                 time.sleep(self.STARTUP_DELAY)
 
+        self.connected = True
         atexit.register(self.stop)
 
     def stop(self) -> None:
         """Cleans up server executable and related periphery."""
-        if not self.running:
+        if not self.connected:
             return
         self._stop()
 
-        parent = psutil.Process(self.process.pid)
-        for child in parent.children(recursive=True):
-            child.terminate()
-        parent.terminate()
-        status = self.process.wait()
-        self.process = None
+        if not self.self_hosted:
+            parent = psutil.Process(self.process.pid)
+            for child in parent.children(recursive=True):
+                child.terminate()
+            parent.terminate()
+            status = self.process.wait()
+            self.process = None
 
-        if status != 0 and status != signal.SIGTERM:
-            self._logger.error(
-                "Could not cleanly shutdown server subprocess; received return code"
-                f" {status}"
-            )
+            if status != 0 and status != signal.SIGTERM:
+                self._logger.error(
+                    "Could not cleanly shutdown server subprocess; received return code"
+                    f" {status}"
+                )
 
         self.session.close()
         self.session = None
 
-        self.running = False
-        self._logger.info("Server closed.")
+        self.connected = False
+        self._logger.info("Connection closed.")
 
     def __enter__(self) -> Self:
         self.start()
@@ -488,11 +502,7 @@ class LazerAsync(LazerBase):
 
     Attributes
     ----------
-    session
-    process
-    port : int
-    log_level : logging level
-    running : bool
+    connected : bool
         Whether the class instance is currently connected to a server.
 
     Examples
@@ -526,7 +536,11 @@ class LazerAsync(LazerBase):
     """
 
     def __init__(
-        self, *, port: int | None = None, log_level: logging._Level = logging.NOTSET
+        self,
+        *,
+        port: int | None = None,
+        self_hosted: bool = False,
+        log_level: logging._Level = logging.NOTSET,
     ) -> None:
         """
         Constructs a `LazerAsync` instance.
@@ -541,6 +555,9 @@ class LazerAsync(LazerBase):
         port : int, optional
             Port to run/connect to the server on. Automatically generates an unused
             port if left unset.
+        self_hosted : bool, default False
+            Whether the user is hosting their own server instance. Requires
+            specification of a port if set to `True`.
         log_level : logging level, default `logging.NOTSET`
             Mininum severity level for logging, as found in the `logging` standard
             library.
@@ -549,7 +566,7 @@ class LazerAsync(LazerBase):
         -------
         LazerAsync
         """
-        super().__init__(port=port, log_level=log_level)
+        super().__init__(port=port, self_hosted=self_hosted, log_level=log_level)
 
         self.session = None
         self.process = None
@@ -558,7 +575,7 @@ class LazerAsync(LazerBase):
     def session(self) -> aiohttp.ClientSession:
         """Request session; errors if unset."""
         if self._session is None:
-            raise ServerStateError("Session has not been initialized")
+            raise StateError("Session has not been initialized")
         return self._session
 
     @session.setter
@@ -569,7 +586,7 @@ class LazerAsync(LazerBase):
     def process(self) -> asyncio.subprocess.Process:
         """Executable process; errors if unset."""
         if self._process is None:
-            raise ServerStateError("Process has not been initialized")
+            raise StateError("Process has not been initialized")
         return self._process
 
     @process.setter
@@ -580,51 +597,50 @@ class LazerAsync(LazerBase):
         """Launches and connects to `vibrio` server executable."""
         self._start()
 
-        self.process = await asyncio.create_subprocess_shell(
-            " ".join(self.args()),
-            stdout=self._info_pipe,
-            stderr=self._error_pipe,
-        )
+        if not self.self_hosted:
+            self.process = await asyncio.create_subprocess_shell(
+                " ".join(self.args()),
+                stdout=self._info_pipe,
+                stderr=self._error_pipe,
+            )
 
         self.session = aiohttp.ClientSession(self.address())
-
-        # block until webserver has launched
-        while True:
+        while True:  # block until webserver has launched
             try:
                 async with self.session.get("/api/status") as response:
                     if response.status == 200:
                         break
             except (ConnectionError, aiohttp.ClientConnectionError):
-                pass
-            finally:
                 await asyncio.sleep(self.STARTUP_DELAY)
 
+        self.connected = True
         atexit.register(lambda: asyncio.run(self.stop()))
 
     async def stop(self) -> None:
         """Cleans up server executable and related periphery."""
-        if not self.running:
+        if not self.connected:
             return
         self._stop()
 
-        parent = psutil.Process(self.process.pid)
-        for child in parent.children(recursive=True):
-            child.terminate()
-        parent.terminate()
-        status = await self.process.wait()
-        self.process = None
+        if not self.self_hosted:
+            parent = psutil.Process(self.process.pid)
+            for child in parent.children(recursive=True):
+                child.terminate()
+            parent.terminate()
+            status = await self.process.wait()
+            self.process = None
 
-        if status != 0 and status != signal.SIGTERM:
-            self._logger.error(
-                "Could not cleanly shutdown server subprocess; received return code"
-                f" {status}"
-            )
+            if status != 0 and status != signal.SIGTERM:
+                self._logger.error(
+                    "Could not cleanly shutdown server subprocess; received return code"
+                    f" {status}"
+                )
 
         await self.session.close()
         self.session = None
 
-        self.running = False
-        self._logger.info("Server closed.")
+        self.connected = False
+        self._logger.info("Connection closed.")
 
     async def __aenter__(self) -> Self:
         await self.start()

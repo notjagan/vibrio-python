@@ -14,6 +14,24 @@ pytest_plugins = ("pytest_asyncio",)
 
 
 @pytest.mark.parametrize("beatmap_id", [1001682])
+class TestSelfHosted:
+    def test_get_beatmap(self, beatmap_id: int):
+        beatmap = None
+        with Lazer() as lazer1:
+            with Lazer(port=lazer1.port, self_hosted=True) as lazer2:
+                beatmap = lazer2.get_beatmap(beatmap_id)
+                assert beatmap is not None
+
+    @pytest.mark.asyncio
+    async def test_get_beatmap_async(self, beatmap_id: int):
+        beatmap = None
+        async with LazerAsync() as lazer1:
+            async with LazerAsync(port=lazer1.port, self_hosted=True) as lazer2:
+                beatmap = await lazer2.get_beatmap(beatmap_id)
+                assert beatmap is not None
+
+
+@pytest.mark.parametrize("beatmap_id", [1001682])
 class TestBeatmap:
     def test_get_beatmap(self, beatmap_id: int):
         beatmap = None
@@ -89,9 +107,10 @@ class TestDifficulty:
             assert attributes.max_combo == test_case.max_combo
 
     def test_calculate_difficulty_beatmap(self, test_case: DifficultyTestCase):
-        with Lazer() as lazer, open(
-            RESOURCES_DIR / test_case.beatmap_filename, "rb"
-        ) as beatmap:
+        with (
+            Lazer() as lazer,
+            open(RESOURCES_DIR / test_case.beatmap_filename, "rb") as beatmap,
+        ):
             attributes = lazer.calculate_difficulty(
                 mods=test_case.mods, beatmap=beatmap
             )
@@ -158,9 +177,10 @@ class TestPerformance:
     def test_calculate_performance_beatmap_hitstat(
         self, test_case: PerformanceTestCase
     ):
-        with Lazer() as lazer, open(
-            RESOURCES_DIR / test_case.beatmap_filename, "rb"
-        ) as beatmap:
+        with (
+            Lazer() as lazer,
+            open(RESOURCES_DIR / test_case.beatmap_filename, "rb") as beatmap,
+        ):
             attributes = lazer.calculate_performance(
                 beatmap=beatmap,
                 mods=test_case.mods,
@@ -179,9 +199,10 @@ class TestPerformance:
             assert attributes.total == approx(test_case.pp, EPSILON)
 
     def test_calculate_performance_id_replay(self, test_case: PerformanceTestCase):
-        with Lazer() as lazer, open(
-            RESOURCES_DIR / test_case.replay_filename, "rb"
-        ) as replay:
+        with (
+            Lazer() as lazer,
+            open(RESOURCES_DIR / test_case.replay_filename, "rb") as replay,
+        ):
             attributes = lazer.calculate_performance(
                 beatmap_id=test_case.beatmap_id,
                 replay=replay,
@@ -189,9 +210,11 @@ class TestPerformance:
             assert attributes.total == approx(test_case.pp, EPSILON)
 
     def test_calculate_performance_beatmap_replay(self, test_case: PerformanceTestCase):
-        with Lazer() as lazer, open(
-            RESOURCES_DIR / test_case.beatmap_filename, "rb"
-        ) as beatmap, open(RESOURCES_DIR / test_case.replay_filename, "rb") as replay:
+        with (
+            Lazer() as lazer,
+            open(RESOURCES_DIR / test_case.beatmap_filename, "rb") as beatmap,
+            open(RESOURCES_DIR / test_case.replay_filename, "rb") as replay,
+        ):
             attributes = lazer.calculate_performance(
                 beatmap=beatmap,
                 replay=replay,
@@ -253,11 +276,10 @@ class TestPerformance:
         self, test_case: PerformanceTestCase
     ):
         async with LazerAsync() as lazer:
-            with open(
-                RESOURCES_DIR / test_case.beatmap_filename, "rb"
-            ) as beatmap, open(
-                RESOURCES_DIR / test_case.replay_filename, "rb"
-            ) as replay:
+            with (
+                open(RESOURCES_DIR / test_case.beatmap_filename, "rb") as beatmap,
+                open(RESOURCES_DIR / test_case.replay_filename, "rb") as replay,
+            ):
                 attributes = await lazer.calculate_performance(
                     beatmap=beatmap,
                     replay=replay,
