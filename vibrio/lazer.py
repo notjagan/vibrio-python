@@ -88,7 +88,8 @@ class LogPipe(IO[str]):
 class LazerBase(ABC):
     """Shared functionality for lazer wrappers."""
 
-    STARTUP_DELAY = 0.05  # Amount of time (seconds) between requests during startup
+    STARTUP_DELAY = 0.05
+    """Amount of time (seconds) between requests during startup"""
 
     def __init__(
         self, *, port: int | None = None, log_level: logging._Level = logging.NOTSET
@@ -99,18 +100,19 @@ class LazerBase(ABC):
             self.port = port
 
         self.running = False
-        self.server_path = get_vibrio_path(platform.system())
-        if not self.server_path.exists():
-            raise FileNotFoundError(f'No executable found at "{self.server_path}"')
+        self._server_path = get_vibrio_path(platform.system())
+        if not self._server_path.exists():
+            raise FileNotFoundError(f'No executable found at "{self._server_path}"')
 
-        self.logger = logging.getLogger(str(id(self)))
-        self.logger.setLevel(log_level)
+        self._logger = logging.getLogger(str(id(self)))
+        self._logger.setLevel(log_level)
 
-        self.info_pipe: LogPipe | None
-        self.error_pipe: LogPipe | None
+        self._info_pipe: LogPipe | None
+        self._error_pipe: LogPipe | None
 
     def args(self) -> list[str]:
-        return [str(self.server_path), "--urls", self.address()]
+        """Produces the command line arguments for the server executable."""
+        return [str(self._server_path), "--urls", self.address()]
 
     def address(self) -> str:
         """Constructs the base URL for the web server."""
@@ -121,17 +123,17 @@ class LazerBase(ABC):
             raise ServerStateError("Server is already running")
         self.running = True
 
-        self.info_pipe = LogPipe(self.logger.info)
-        self.error_pipe = LogPipe(self.logger.error)
+        self._info_pipe = LogPipe(self._logger.info)
+        self._error_pipe = LogPipe(self._logger.error)
 
-        self.logger.info(f"Hosting server on port {self.port}.")
+        self._logger.info(f"Hosting server on port {self.port}.")
 
     def _stop(self) -> None:
-        self.logger.info(f"Shutting down server...")
-        if self.info_pipe is not None:
-            self.info_pipe.close()
-        if self.error_pipe is not None:
-            self.error_pipe.close()
+        self._logger.info("Shutting down server...")
+        if self._info_pipe is not None:
+            self._info_pipe.close()
+        if self._error_pipe is not None:
+            self._error_pipe.close()
 
     @staticmethod
     def _not_found_error(beatmap_id: int) -> BeatmapNotFound:
@@ -139,6 +141,7 @@ class LazerBase(ABC):
 
 
 class BaseUrlSession(requests.Session):
+    """Request session with a base URL as used internally in `Lazer`."""
     def __init__(self, base_url: str) -> None:
         super().__init__()
         self.base_url = base_url
@@ -151,11 +154,70 @@ class BaseUrlSession(requests.Session):
 
 
 class Lazer(LazerBase):
-    """Synchronous implementation for interfacing with osu!lazer functionality."""
+    """
+    Context manager for interfacing with osu!lazer functionality (synchronously).
+
+    Attributes
+    ----------
+    session
+    process
+    port : int
+    log_level : logging level
+    running : bool
+        Whether the class instance is currently connected to a server.
+
+    Examples
+    --------
+    >>> from vibrio import HitStatistics, Lazer, OsuMod
+    >>> with Lazer() as lazer:
+    ...     attributes = lazer.calculate_performance(
+    ...         beatmap_id=1001682,
+    ...         mods=[OsuMod.HIDDEN, OsuMod.DOUBLE_TIME],
+    ...         hitstats=HitStatistics(
+    ...             count_300=2019, count_100=104, count_50=0, count_miss=3, combo=3141
+    ...         ),
+    ...     )
+    ...     attributes.total
+    1304.35
+
+    Notes
+    -----
+    This class can be used traditionally instead of as a context manager, in which case
+    the use of `start()` and `stop()` are left up to the user. Only do this if you know
+    what you are doing; failing to call `stop()` appropriately may leave an instance of
+    the server dangling. `start()` will attempt to create a callback that culls any
+    server instances on program shutdown, but proceed with caution and call `stop()` as
+    necessary to avoid any possible memory leaks.
+
+    See Also
+    --------
+    LazerAsync : asynchronous implementation of the same functionality
+    """
 
     def __init__(
         self, *, port: int | None = None, log_level: logging._Level = logging.NOTSET
     ) -> None:
+        """
+        Constructs a `Lazer` instance.
+
+        This *does not* launch/connect to a server instance. If you are using this class
+        as a context manager, feel free to ignore this as the `__enter__()` and
+        `__exit__()` methods will handle this for you. Otherwise, see `start()` and
+        `stop()` and the notes in the class docstring.
+
+        Parameters
+        ----------
+        port : int, optional
+            Port to run/connect to the server on. Automatically generates an unused
+            port if left unset.
+        log_level : logging level, default `logging.NOTSET`
+            Mininum severity level for logging, as found in the `logging` standard
+            library.
+
+        Returns
+        -------
+        Lazer
+        """
         super().__init__(port=port, log_level=log_level)
 
         self.session = None
@@ -163,6 +225,7 @@ class Lazer(LazerBase):
 
     @property
     def session(self) -> BaseUrlSession:
+        """Request session; errors if unset."""
         if self._session is None:
             raise ServerStateError("Session has not been initialized")
         return self._session
@@ -173,6 +236,7 @@ class Lazer(LazerBase):
 
     @property
     def process(self) -> subprocess.Popen[bytes]:
+        """Executable process; errors if unset."""
         if self._process is None:
             raise ServerStateError("Process has not been initialized")
         return self._process
@@ -182,13 +246,13 @@ class Lazer(LazerBase):
         self._process = value
 
     def start(self) -> None:
-        """Launches server executable."""
+        """Launches and connects to `vibrio` server executable."""
         self._start()
 
         self.process = subprocess.Popen(
             self.args(),
-            stdout=self.info_pipe,
-            stderr=self.error_pipe,
+            stdout=self._info_pipe,
+            stderr=self._error_pipe,
         )
 
         self.session = BaseUrlSession(self.address())
@@ -207,7 +271,7 @@ class Lazer(LazerBase):
         atexit.register(self.stop)
 
     def stop(self) -> None:
-        """Cleans up server executable."""
+        """Cleans up server executable and related periphery."""
         if not self.running:
             return
         self._stop()
@@ -220,7 +284,7 @@ class Lazer(LazerBase):
         self.process = None
 
         if status != 0 and status != signal.SIGTERM:
-            self.logger.error(
+            self._logger.error(
                 "Could not cleanly shutdown server subprocess; received return code"
                 f" {status}"
             )
@@ -229,7 +293,7 @@ class Lazer(LazerBase):
         self.session = None
 
         self.running = False
-        self.logger.info("Server closed.")
+        self._logger.info("Server closed.")
 
     def __enter__(self) -> Self:
         self.start()
@@ -241,6 +305,7 @@ class Lazer(LazerBase):
 
     @staticmethod
     def _status_error(response: requests.Response) -> ServerError:
+        """Emits an error based on the status of the provided request."""
         if response.text:
             return ServerError(
                 f"Unexpected status code {response.status_code}: {response.text}"
@@ -249,7 +314,7 @@ class Lazer(LazerBase):
             return ServerError(f"Unexpected status code {response.status_code}")
 
     def has_beatmap(self, beatmap_id: int) -> bool:
-        """Checks if given beatmap is cached/available locally."""
+        """Returns true if the given beatmap is currently stored locally."""
         with self.session.get(f"/api/beatmaps/{beatmap_id}/status") as response:
             if response.status_code == 200:
                 return True
@@ -283,6 +348,23 @@ class Lazer(LazerBase):
         beatmap: BinaryIO | None = None,
         mods: list[OsuMod] | None = None,
     ) -> OsuDifficultyAttributes:
+        """
+        Calculates the difficulty parameters for a beatmap and optional mod combination.
+
+        `beatmap_id` and `beatmap` specify the beatmap to be queried; exactly one of
+        the two must be set during difficulty calculation.
+
+        Parameters
+        ----------
+        beatmap_id : int, optional
+        beatmap : binary file stream, optional
+        mods: list of OsuMod enums, optional
+
+        Returns
+        -------
+        OsuDifficultyAttributes
+            Dataclass encoding the difficulty attributes of the requested map.
+        """
         params: dict[str, Any] = {}
         if mods is not None:
             params["mods"] = [mod.value for mod in mods]
@@ -320,6 +402,30 @@ class Lazer(LazerBase):
         hit_stats: HitStatistics | None = None,
         replay: BinaryIO | None = None,
     ) -> OsuPerformanceAttributes:
+        """
+        Calculates the performance values for a given play on a provided beatmap.
+
+        Each query essentially requires a method of specifying the beatmap the play was
+        made on (through exactly one of `beatmap_id`, `beatmap` or `difficulty`) and
+        a method of describing the play itself (through exactly one of `hit_stats` and
+        `replay`). However, processing a replay is not possible with difficulty
+        attributes alone, so using `replay` requires the use of `hit_stats`.
+
+        Parameters
+        ----------
+        beatmap_id : int, optional
+        beatmap : binary file stream, optional
+        mods : list of OsuMod enums, optional
+        difficulty : OsuDifficultyAttributes, optional
+            Difficulty attribute instance, as returned by `calculate_difficulty()`.
+        hit_stats : HitStatistics, optional
+        replay : binary file stream, optional
+
+        Returns
+        -------
+        OsuPerformanceAttributes
+            Dataclass encoding the performance values of the requested play.
+        """
         if beatmap_id is not None:
             if hit_stats is not None:
                 params = hit_stats.to_dict()
@@ -377,11 +483,72 @@ class Lazer(LazerBase):
 
 
 class LazerAsync(LazerBase):
-    """Asynchronous implementation for interfacing with osu!lazer functionality."""
+    """
+    Context manager for interfacing with osu!lazer functionality asynchronously.
+
+    Attributes
+    ----------
+    session
+    process
+    port : int
+    log_level : logging level
+    running : bool
+        Whether the class instance is currently connected to a server.
+
+    Examples
+    --------
+    Note: the following example would not execute in a REPL environment as async
+    statements must occur within async functions, but the principle still holds.
+    >>> from vibrio import HitStatistics, Lazer, OsuMod
+    >>> async with Lazer() as lazer:
+    ...     attributes = await lazer.calculate_performance(
+    ...         beatmap_id=1001682,
+    ...         mods=[OsuMod.HIDDEN, OsuMod.DOUBLE_TIME],
+    ...         hitstats=HitStatistics(
+    ...             count_300=2019, count_100=104, count_50=0, count_miss=3, combo=3141
+    ...         ),
+    ...     )
+    ...     attributes.total
+    1304.35
+
+    Notes
+    -----
+    This class can be used traditionally instead of as a context manager, in which case
+    the use of `start()` and `stop()` are left up to the user. Only do this if you know
+    what you are doing; failing to call `stop()` appropriately may leave an instance of
+    the server dangling. `start()` will attempt to create a callback that culls any
+    server instances on program shutdown, but proceed with caution and call `stop()` as
+    necessary to avoid any possible memory leaks.
+
+    See Also
+    --------
+    Lazer : synchronous implementation of the same functionality
+    """
 
     def __init__(
         self, *, port: int | None = None, log_level: logging._Level = logging.NOTSET
     ) -> None:
+        """
+        Constructs a `LazerAsync` instance.
+
+        This *does not* launch/connect to a server instance. If you are using this class
+        as a context manager, feel free to ignore this as the `__aenter__()` and
+        `__aexit__()` methods will handle this for you. Otherwise, see `start()` and
+        `stop()` and the notes in the class docstring.
+
+        Parameters
+        ----------
+        port : int, optional
+            Port to run/connect to the server on. Automatically generates an unused
+            port if left unset.
+        log_level : logging level, default `logging.NOTSET`
+            Mininum severity level for logging, as found in the `logging` standard
+            library.
+
+        Returns
+        -------
+        LazerAsync
+        """
         super().__init__(port=port, log_level=log_level)
 
         self.session = None
@@ -389,6 +556,7 @@ class LazerAsync(LazerBase):
 
     @property
     def session(self) -> aiohttp.ClientSession:
+        """Request session; errors if unset."""
         if self._session is None:
             raise ServerStateError("Session has not been initialized")
         return self._session
@@ -399,6 +567,7 @@ class LazerAsync(LazerBase):
 
     @property
     def process(self) -> asyncio.subprocess.Process:
+        """Executable process; errors if unset."""
         if self._process is None:
             raise ServerStateError("Process has not been initialized")
         return self._process
@@ -408,13 +577,13 @@ class LazerAsync(LazerBase):
         self._process = value
 
     async def start(self) -> None:
-        """Launches server executable."""
+        """Launches and connects to `vibrio` server executable."""
         self._start()
 
         self.process = await asyncio.create_subprocess_shell(
             " ".join(self.args()),
-            stdout=self.info_pipe,
-            stderr=self.error_pipe,
+            stdout=self._info_pipe,
+            stderr=self._error_pipe,
         )
 
         self.session = aiohttp.ClientSession(self.address())
@@ -433,7 +602,7 @@ class LazerAsync(LazerBase):
         atexit.register(lambda: asyncio.run(self.stop()))
 
     async def stop(self) -> None:
-        """Cleans up server executable."""
+        """Cleans up server executable and related periphery."""
         if not self.running:
             return
         self._stop()
@@ -446,7 +615,7 @@ class LazerAsync(LazerBase):
         self.process = None
 
         if status != 0 and status != signal.SIGTERM:
-            self.logger.error(
+            self._logger.error(
                 "Could not cleanly shutdown server subprocess; received return code"
                 f" {status}"
             )
@@ -455,7 +624,7 @@ class LazerAsync(LazerBase):
         self.session = None
 
         self.running = False
-        self.logger.info("Server closed.")
+        self._logger.info("Server closed.")
 
     async def __aenter__(self) -> Self:
         await self.start()
@@ -467,6 +636,7 @@ class LazerAsync(LazerBase):
 
     @staticmethod
     async def _status_error(response: aiohttp.ClientResponse) -> ServerError:
+        """Emits an error based on the status of the provided request."""
         text = await response.text()
         if text:
             return ServerError(
@@ -476,7 +646,7 @@ class LazerAsync(LazerBase):
             return ServerError(f"Unexpected status code {response.status}")
 
     async def has_beatmap(self, beatmap_id: int) -> bool:
-        """Checks if given beatmap is cached/available locally."""
+        """Returns true if the given beatmap is currently stored locally."""
         async with self.session.get(f"/api/beatmaps/{beatmap_id}/status") as response:
             if response.status == 200:
                 return True
@@ -510,6 +680,23 @@ class LazerAsync(LazerBase):
         beatmap: BinaryIO | None = None,
         mods: list[OsuMod] | None = None,
     ) -> OsuDifficultyAttributes:
+        """
+        Calculates the difficulty parameters for a beatmap and optional mod combination.
+
+        `beatmap_id` and `beatmap` specify the beatmap to be queried; exactly one of
+        the two must be set during difficulty calculation.
+
+        Parameters
+        ----------
+        beatmap_id : int, optional
+        beatmap : binary file stream, optional
+        mods: list of OsuMod enums, optional
+
+        Returns
+        -------
+        OsuDifficultyAttributes
+            Dataclass encoding the difficulty attributes of the requested map.
+        """
         params = {}
         if mods is not None:
             params["mods"] = [mod.value for mod in mods]
@@ -549,6 +736,30 @@ class LazerAsync(LazerBase):
         hit_stats: HitStatistics | None = None,
         replay: BinaryIO | None = None,
     ) -> OsuPerformanceAttributes:
+        """
+        Calculates the performance values for a given play on a provided beatmap.
+
+        Each query essentially requires a method of specifying the beatmap the play was
+        made on (through exactly one of `beatmap_id`, `beatmap` or `difficulty`) and
+        a method of describing the play itself (through exactly one of `hit_stats` and
+        `replay`). However, processing a replay is not possible with difficulty
+        attributes alone, so using `replay` requires the use of `hit_stats`.
+
+        Parameters
+        ----------
+        beatmap_id : int, optional
+        beatmap : binary file stream, optional
+        mods : list of OsuMod enums, optional
+        difficulty : OsuDifficultyAttributes, optional
+            Difficulty attribute instance, as returned by `calculate_difficulty()`.
+        hit_stats : HitStatistics, optional
+        replay : binary file stream, optional
+
+        Returns
+        -------
+        OsuPerformanceAttributes
+            Dataclass encoding the performance values of the requested play.
+        """
         if beatmap_id is not None:
             if hit_stats is not None:
                 params = hit_stats.to_dict()
