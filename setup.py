@@ -109,7 +109,7 @@ class BuildVendoredDependencies(Command):
 class CustomBuild(build):
     """Build process including compiling server executable."""
 
-    sub_commands = [("build_vendor", None)] + build.sub_commands
+    sub_commands = [("build_vendor", None)] + build.sub_commands  # type: ignore
 
 
 setup(
