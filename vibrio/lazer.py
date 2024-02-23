@@ -221,7 +221,8 @@ class Lazer(LazerBase):
 
         if status != 0 and status != signal.SIGTERM:
             self.logger.error(
-                f"Could not cleanly shutdown server subprocess; received return code {status}"
+                "Could not cleanly shutdown server subprocess; received return code"
+                f" {status}"
             )
 
         self.session.close()
@@ -289,7 +290,7 @@ class Lazer(LazerBase):
         if beatmap_id is not None:
             if beatmap is not None:
                 raise ValueError(
-                    "Exactly one of `beatmap_id` and `beatmap` should be set"
+                    "Exactly one of `beatmap_id` and `beatmap` must be populated"
                 )
             response = self.session.get(f"/api/difficulty/{beatmap_id}", params=params)
         elif beatmap is not None:
@@ -297,7 +298,9 @@ class Lazer(LazerBase):
                 "/api/difficulty", params=params, files={"beatmap": beatmap}
             )
         else:
-            raise ValueError("Exactly one of `beatmap_id` and `beatmap` should be set")
+            raise ValueError(
+                "Exactly one of `beatmap_id` and `beatmap` must be populated"
+            )
 
         with response:
             if response.status_code == 200:
@@ -330,7 +333,10 @@ class Lazer(LazerBase):
                     f"/api/performance/replay/{beatmap_id}", files={"replay": replay}
                 )
             else:
-                raise ValueError
+                raise ValueError(
+                    "Exactly one of `hit_stats` and `replay` must be populated when"
+                    " calculating performance with a beatmap ID"
+                )
 
         elif beatmap is not None:
             if hit_stats is not None:
@@ -346,14 +352,20 @@ class Lazer(LazerBase):
                     files={"beatmap": beatmap, "replay": replay},
                 )
             else:
-                raise ValueError
+                raise ValueError(
+                    "Exactly one of `hit_stats` and `replay` must be populated when"
+                    " calculating performance with a beatmap"
+                )
 
         elif difficulty is not None and hit_stats is not None:
             params = difficulty.to_dict() | hit_stats.to_dict()
             response = self.session.get("/api/performance", params=params)
 
         else:
-            raise ValueError
+            raise ValueError(
+                "Exactly one of `beatmap_id`, `beatmap`, and `difficulty` must be"
+                " populated"
+            )
 
         with response:
             if response.status_code == 200:
@@ -435,7 +447,8 @@ class LazerAsync(LazerBase):
 
         if status != 0 and status != signal.SIGTERM:
             self.logger.error(
-                f"Could not cleanly shutdown server subprocess; received return code {status}"
+                "Could not cleanly shutdown server subprocess; received return code"
+                f" {status}"
             )
 
         await self.session.close()
@@ -504,7 +517,7 @@ class LazerAsync(LazerBase):
         if beatmap_id is not None:
             if beatmap is not None:
                 raise ValueError(
-                    "Exactly one of `beatmap_id` and `beatmap` should be set"
+                    "Exactly one of `beatmap_id` and `beatmap` must be populated"
                 )
             response = await self.session.get(
                 f"/api/difficulty/{beatmap_id}", params=params
@@ -514,7 +527,9 @@ class LazerAsync(LazerBase):
                 "/api/difficulty", params=params, data={"beatmap": beatmap}
             )
         else:
-            raise ValueError("Exactly one of `beatmap_id` and `beatmap` should be set")
+            raise ValueError(
+                "Exactly one of `beatmap_id` and `beatmap` must be populated"
+            )
 
         async with response:
             if response.status == 200:
@@ -547,7 +562,10 @@ class LazerAsync(LazerBase):
                     f"/api/performance/replay/{beatmap_id}", data={"replay": replay}
                 )
             else:
-                raise ValueError
+                raise ValueError(
+                    "Exactly one of `hit_stats` and `replay` must be populated when"
+                    " calculating performance with a beatmap ID"
+                )
 
         elif beatmap is not None:
             if hit_stats is not None:
@@ -563,14 +581,20 @@ class LazerAsync(LazerBase):
                     data={"beatmap": beatmap, "replay": replay},
                 )
             else:
-                raise ValueError
+                raise ValueError(
+                    "Exactly one of `hit_stats` and `replay` must be populated when"
+                    " calculating performance with a beatmap"
+                )
 
         elif difficulty is not None and hit_stats is not None:
             params = difficulty.to_dict() | hit_stats.to_dict()
             response = await self.session.get("/api/performance", params=params)
 
         else:
-            raise ValueError
+            raise ValueError(
+                "Exactly one of `beatmap_id`, `beatmap`, and `difficulty` must be"
+                " populated"
+            )
 
         async with response:
             if response.status == 200:
