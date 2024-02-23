@@ -7,6 +7,8 @@ from typing_extensions import Self
 
 
 class OsuMod(Enum):
+    """Enum representing the osu!standard mods as two-letter string codes."""
+
     NO_FAIL = "NF"
     EASY = "EZ"
     TOUCH_DEVICE = "TD"
@@ -26,8 +28,18 @@ class OsuMod(Enum):
 
 @dataclass
 class SerializableDataclass(ABC):
+    """
+    Abstract base for dataclasses supporting serialization to and deserialization
+    from a dictionary.
+
+    This base class is intended for cross-compatible use with return types from C# code,
+    so key names are expected in camel case during deserialization and are normalized to
+    remove underscores during serialization.
+    """
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Instantiates a dataclass from the provided dictionary."""
         values: dict[str, Any] = {}
         data_lowercase = {k.lower(): v for k, v in data.items()}
         for field in fields(cls):
@@ -50,20 +62,38 @@ class SerializableDataclass(ABC):
         return data
 
     def to_dict(self) -> dict[str, Any]:
+        """Serializes dataclass values to a dictionary."""
         return asdict(self, dict_factory=self._factory)
 
 
 @dataclass
 class HitStatistics(SerializableDataclass):
+    """Dataclass representing an osu! play in terms of individual hit statistics."""
+
     count_300: int
+    """The number of 300s in the play."""
     count_100: int
+    """The number of 100s in the play."""
     count_50: int
+    """The number of 50s in the play."""
     count_miss: int
+    """The number of misses in the play."""
     combo: int
+    """The maximum combo of the play."""
 
 
 @dataclass
 class OsuDifficultyAttributes(SerializableDataclass):
+    """
+    osu!standard difficulty attributes, as produced by osu!lazer's internal difficulty
+    calculation.
+
+    See Also
+    --------
+    Lazer.calculate_difficulty
+    LazerAsync.calculate_difficulty
+    """
+
     mods: list[OsuMod]
     star_rating: float
     max_combo: int
@@ -82,7 +112,18 @@ class OsuDifficultyAttributes(SerializableDataclass):
 
 @dataclass
 class OsuPerformanceAttributes(SerializableDataclass):
+    """
+    osu!standard performance attributes, as produced by osu!lazer's internal performance
+    calculation.
+
+    See Also
+    --------
+    Lazer.calculate_difficulty
+    LazerAsync.calculate_difficulty
+    """
+
     total: float
+    """The play's total pp amount."""
     aim: float
     speed: float
     accuracy: float
