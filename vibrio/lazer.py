@@ -97,8 +97,8 @@ class LazerBase(ABC):
             self.port = find_open_port()
         else:
             self.port = port
-        self.running = False
 
+        self.running = False
         self.server_path = get_vibrio_path(platform.system())
         if not self.server_path.exists():
             raise FileNotFoundError(f'No executable found at "{self.server_path}"')
@@ -108,6 +108,9 @@ class LazerBase(ABC):
 
         self.info_pipe: LogPipe | None
         self.error_pipe: LogPipe | None
+
+    def args(self) -> list[str]:
+        return [str(self.server_path), "--urls", self.address()]
 
     def address(self) -> str:
         """Constructs the base URL for the web server."""
@@ -183,7 +186,7 @@ class Lazer(LazerBase):
         self._start()
 
         self.process = subprocess.Popen(
-            [self.server_path, "--urls", self.address()],
+            self.args(),
             stdout=self.info_pipe,
             stderr=self.error_pipe,
         )
@@ -279,7 +282,7 @@ class Lazer(LazerBase):
         beatmap: BinaryIO | None = None,
         mods: list[OsuMod] | None = None,
     ) -> OsuDifficultyAttributes:
-        params = {}
+        params: dict[str, Any] = {}
         if mods is not None:
             params["mods"] = [mod.value for mod in mods]
 
@@ -397,7 +400,7 @@ class LazerAsync(LazerBase):
         self._start()
 
         self.process = await asyncio.create_subprocess_shell(
-            f"{self.server_path} --urls {self.address()}",
+            " ".join(self.args()),
             stdout=self.info_pipe,
             stderr=self.error_pipe,
         )
