@@ -1,4 +1,4 @@
-# vibrio-python
+# vibrio-python ([documentation](https://vibrio-python.readthedocs.io/en/latest/))
 
 [![Build](https://github.com/notjagan/vibrio-python/actions/workflows/build.yml/badge.svg)](https://github.com/notjagan/vibrio-python/actions/workflows/build.yml)
 [![CodeFactor](https://www.codefactor.io/repository/github/notjagan/vibrio-python/badge)](https://www.codefactor.io/repository/github/notjagan/vibrio-python)
@@ -17,4 +17,4 @@ Tested (through `cibuildwheel` deployment) and published on `pip` on the followi
     - arm is currently untested due to unavailability through GitHub actions hosting
 - Windows (x86 and AMD64)
 
-If you do not have one of the supported platforms (or otherwise want to build from source), simply clone the repository and use the `build` subcommand (and/or any superset of `build` like `sdist`) in `setup.py` to produce an installable package, then use `pip install` on the result. This will require having the `dotnet` C# tooling on the system path to compile the server solution.
+If you do not have one of the supported platforms (or otherwise want to build from source), simply clone the repository and use the `build` subcommand (and/or any superset of `build` like `sdist`) in `setup.py` to produce an installable package, then use `pip install` on the result. This will require having the `dotnet` C# SDK on the system path to compile the server solution.
