@@ -1,5 +1,6 @@
 # vibrio-python ([documentation](https://vibrio-python.readthedocs.io/en/latest/))
 
+[![PyPI](https://img.shields.io/pypi/v/vibrio.svg)](https://pypi.org/project/vibrio/)
 [![Build](https://github.com/notjagan/vibrio-python/actions/workflows/build.yml/badge.svg)](https://github.com/notjagan/vibrio-python/actions/workflows/build.yml)
 [![CodeFactor](https://www.codefactor.io/repository/github/notjagan/vibrio-python/badge)](https://www.codefactor.io/repository/github/notjagan/vibrio-python)
 
