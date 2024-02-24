@@ -80,34 +80,35 @@ class BuildVendoredDependencies(Command):
             else:
                 raise ex
 
+        print("removing tree")
         shutil.rmtree(EXTENSION_DIR, onerror=onerror)
         EXTENSION_DIR.mkdir(parents=True, exist_ok=True)
 
+        print("compiling extension")
         server_dir = VENDOR_DIR / "vibrio"
-        try:
-            code = subprocess.call(
-                [
-                    "dotnet",
-                    "msbuild",
-                    "/m",
-                    "/t:FullClean;Publish",
-                    "/Restore",
-                    '/p:"UseCurrentRuntimeIdentifier=True"',
-                ],
-                cwd=server_dir / "Vibrio",
-            )
-        except Exception as e:
-            print("error in subprocess")
-            raise e
+        code = subprocess.call(
+            [
+                "dotnet",
+                "msbuild",
+                "/m",
+                "/t:FullClean;Publish",
+                "/Restore",
+                '/p:"UseCurrentRuntimeIdentifier=True"',
+            ],
+            cwd=server_dir / "Vibrio",
+        )
         if code != 0:
             raise Exception("MSBuild exited with non-zero code")
 
+        print("changing permissions")
         publish_dir = server_dir / "publish"
         for path in publish_dir.glob("*.zip"):
             with ZipFile(path, "r") as zip_file:
                 for filename in zip_file.filelist:
                     executable = Path(zip_file.extract(filename, EXTENSION_DIR))
                     executable.chmod(executable.stat().st_mode | stat.S_IEXEC)
+
+        raise Exception
 
 
 class CustomBuild(build):
