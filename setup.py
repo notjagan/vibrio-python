@@ -84,17 +84,21 @@ class BuildVendoredDependencies(Command):
         EXTENSION_DIR.mkdir(parents=True, exist_ok=True)
 
         server_dir = VENDOR_DIR / "vibrio"
-        code = subprocess.call(
-            [
-                "dotnet",
-                "msbuild",
-                "/m",
-                "/t:FullClean;Publish",
-                "/Restore",
-                '/p:"UseCurrentRuntimeIdentifier=True"',
-            ],
-            cwd=server_dir / "Vibrio",
-        )
+        try:
+            code = subprocess.call(
+                [
+                    "dotnet",
+                    "msbuild",
+                    "/m",
+                    "/t:FullClean;Publish",
+                    "/Restore",
+                    '/p:"UseCurrentRuntimeIdentifier=True"',
+                ],
+                cwd=server_dir / "Vibrio",
+            )
+        except Exception as e:
+            print(e)
+            raise e
         if code != 0:
             raise Exception("MSBuild exited with non-zero code")
 
