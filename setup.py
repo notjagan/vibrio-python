@@ -67,20 +67,18 @@ class BuildVendoredDependencies(Command):
 
     def run(self) -> None:
         def onerror(
-            func: Callable[[str], Any], path: str, ex_info: tuple[Exception, ...]
+            func: Callable[[str], Any], path: str, ex_info: tuple[BaseException, ...]
         ) -> None:
-            ex, *_ = ex_info
+            ex_type, *_ = ex_info
             # resolve any permission issues
-            if (
-                ex is PermissionError or isinstance(ex, PermissionError)
-            ) and not os.access(path, os.W_OK):
+            if ex_type is PermissionError and not os.access(path, os.W_OK):
                 os.chmod(path, os.stat(path).st_mode | stat.S_IWUSR)
                 func(path)
             # ignore missing file
-            elif ex is FileNotFoundError or isinstance(ex, FileNotFoundError):
+            elif ex_type is FileNotFoundError:
                 pass
             else:
-                raise ex
+                raise ex_type
 
         shutil.rmtree(EXTENSION_DIR, onerror=onerror)
         EXTENSION_DIR.mkdir(parents=True, exist_ok=True)
