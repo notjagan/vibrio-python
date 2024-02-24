@@ -97,7 +97,7 @@ class BuildVendoredDependencies(Command):
                 cwd=server_dir / "Vibrio",
             )
         except Exception as e:
-            print(e)
+            print("error in subprocess")
             raise e
         if code != 0:
             raise Exception("MSBuild exited with non-zero code")
