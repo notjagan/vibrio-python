@@ -71,20 +71,20 @@ class BuildVendoredDependencies(Command):
         ) -> None:
             ex, *_ = ex_info
             # resolve any permission issues
-            if isinstance(ex, PermissionError) and not os.access(path, os.W_OK):
+            if (
+                ex is PermissionError or isinstance(ex, PermissionError)
+            ) and not os.access(path, os.W_OK):
                 os.chmod(path, os.stat(path).st_mode | stat.S_IWUSR)
                 func(path)
             # ignore missing file
-            elif isinstance(ex, FileNotFoundError):
+            elif ex is FileNotFoundError or isinstance(ex, FileNotFoundError):
                 pass
             else:
                 raise ex
 
-        print("removing tree")
         shutil.rmtree(EXTENSION_DIR, onerror=onerror)
         EXTENSION_DIR.mkdir(parents=True, exist_ok=True)
 
-        print("compiling extension")
         server_dir = VENDOR_DIR / "vibrio"
         code = subprocess.call(
             [
@@ -100,15 +100,12 @@ class BuildVendoredDependencies(Command):
         if code != 0:
             raise Exception("MSBuild exited with non-zero code")
 
-        print("changing permissions")
         publish_dir = server_dir / "publish"
         for path in publish_dir.glob("*.zip"):
             with ZipFile(path, "r") as zip_file:
                 for filename in zip_file.filelist:
                     executable = Path(zip_file.extract(filename, EXTENSION_DIR))
                     executable.chmod(executable.stat().st_mode | stat.S_IEXEC)
-
-        raise Exception
 
 
 class CustomBuild(build):
