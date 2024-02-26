@@ -67,18 +67,18 @@ class BuildVendoredDependencies(Command):
 
     def run(self) -> None:
         def onerror(
-            func: Callable[..., Any], path: str, ex_info: tuple[Exception, ...]
+            func: Callable[[str], Any], path: str, ex_info: tuple[BaseException, ...]
         ) -> None:
-            ex, *_ = ex_info
+            ex_type, *_ = ex_info
             # resolve any permission issues
-            if ex is PermissionError and not os.access(path, os.W_OK):
-                os.chmod(path, stat.S_IWUSR)
+            if ex_type is PermissionError and not os.access(path, os.W_OK):
+                os.chmod(path, os.stat(path).st_mode | stat.S_IWUSR)
                 func(path)
             # ignore missing file
-            elif ex is FileNotFoundError:
+            elif ex_type is FileNotFoundError:
                 pass
             else:
-                raise
+                raise ex_type
 
         shutil.rmtree(EXTENSION_DIR, onerror=onerror)
         EXTENSION_DIR.mkdir(parents=True, exist_ok=True)
@@ -101,13 +101,15 @@ class BuildVendoredDependencies(Command):
         publish_dir = server_dir / "publish"
         for path in publish_dir.glob("*.zip"):
             with ZipFile(path, "r") as zip_file:
-                zip_file.extractall(EXTENSION_DIR)
+                for filename in zip_file.filelist:
+                    executable = Path(zip_file.extract(filename, EXTENSION_DIR))
+                    executable.chmod(executable.stat().st_mode | stat.S_IEXEC)
 
 
 class CustomBuild(build):
     """Build process including compiling server executable."""
 
-    sub_commands = [("build_vendor", None)] + build.sub_commands
+    sub_commands = [("build_vendor", None)] + build.sub_commands  # type: ignore
 
 
 setup(
