@@ -418,6 +418,55 @@ class Lazer(LazerBase):
             else:
                 raise self._status_error(response)
 
+    def _request_performance_beatmap_id(
+        self,
+        beatmap_id: int,
+        mods: list[OsuMod] | None,
+        hit_stats: HitStatistics | None = None,
+        replay: BinaryIO | None = None,
+    ) -> requests.Response:
+        """Queries for the performance of a play given a beatmap ID."""
+        if hit_stats is not None:
+            params = hit_stats.to_dict()
+            if mods is not None:
+                params["mods"] = [mod.value for mod in mods]
+            return self.session.get(f"/api/performance/{beatmap_id}", params=params)
+        elif replay is not None:
+            return self.session.post(
+                f"/api/performance/replay/{beatmap_id}", files={"replay": replay}
+            )
+        else:
+            raise ValueError(
+                "Exactly one of `hit_stats` and `replay` must be populated when"
+                " calculating performance with a beatmap ID"
+            )
+
+    def _request_performance_beatmap(
+        self,
+        beatmap: BinaryIO,
+        mods: list[OsuMod] | None,
+        hit_stats: HitStatistics | None = None,
+        replay: BinaryIO | None = None,
+    ) -> requests.Response:
+        """Queries for the performance of a play given a beatmap ID."""
+        if hit_stats is not None:
+            params = hit_stats.to_dict()
+            if mods is not None:
+                params["mods"] = [mod.value for mod in mods]
+            return self.session.post(
+                "/api/performance", params=params, files={"beatmap": beatmap}
+            )
+        elif replay is not None:
+            return self.session.post(
+                "/api/performance/replay",
+                files={"beatmap": beatmap, "replay": replay},
+            )
+        else:
+            raise ValueError(
+                "Exactly one of `hit_stats` and `replay` must be populated when"
+                " calculating performance with a beatmap"
+            )
+
     def calculate_performance(
         self,
         *,
@@ -435,13 +484,14 @@ class Lazer(LazerBase):
         made on (through exactly one of `beatmap_id`, `beatmap` or `difficulty`) and
         a method of describing the play itself (through exactly one of `hit_stats` and
         `replay`). However, processing a replay is not possible with difficulty
-        attributes alone, so using `replay` requires the use of `hit_stats`.
+        attributes alone, so using `difficulty` requires the use of `hit_stats`.
 
         Parameters
         ----------
         beatmap_id : int, optional
         beatmap : binary file stream, optional
         mods : list of OsuMod enums, optional
+            For use with either `beatmap` or `beatmap_id`.
         difficulty : OsuDifficultyAttributes, optional
             Difficulty attribute instance, as returned by `calculate_difficulty()`.
         hit_stats : HitStatistics, optional
@@ -453,46 +503,23 @@ class Lazer(LazerBase):
             Dataclass encoding the performance values of the requested play.
         """
         if beatmap_id is not None:
-            if hit_stats is not None:
-                params = hit_stats.to_dict()
-                if mods is not None:
-                    params["mods"] = [mod.value for mod in mods]
-                response = self.session.get(
-                    f"/api/performance/{beatmap_id}", params=params
-                )
-            elif replay is not None:
-                response = self.session.post(
-                    f"/api/performance/replay/{beatmap_id}", files={"replay": replay}
-                )
-            else:
-                raise ValueError(
-                    "Exactly one of `hit_stats` and `replay` must be populated when"
-                    " calculating performance with a beatmap ID"
-                )
-
+            response = self._request_performance_beatmap_id(
+                beatmap_id, mods, hit_stats, replay
+            )
         elif beatmap is not None:
+            response = self._request_performance_beatmap(
+                beatmap, mods, hit_stats, replay
+            )
+        elif difficulty is not None:
             if hit_stats is not None:
-                params = hit_stats.to_dict()
-                if mods is not None:
-                    params["mods"] = [mod.value for mod in mods]
-                response = self.session.post(
-                    "/api/performance", params=params, files={"beatmap": beatmap}
-                )
-            elif replay is not None:
-                response = self.session.post(
-                    "/api/performance/replay",
-                    files={"beatmap": beatmap, "replay": replay},
+                response = self.session.get(
+                    "/api/performance",
+                    params=difficulty.to_dict() | hit_stats.to_dict(),
                 )
             else:
                 raise ValueError(
-                    "Exactly one of `hit_stats` and `replay` must be populated when"
-                    " calculating performance with a beatmap"
+                    "`hit_stats` must be populated when querying with `difficulty`"
                 )
-
-        elif difficulty is not None and hit_stats is not None:
-            params = difficulty.to_dict() | hit_stats.to_dict()
-            response = self.session.get("/api/performance", params=params)
-
         else:
             raise ValueError(
                 "Exactly one of `beatmap_id`, `beatmap`, and `difficulty` must be"
@@ -755,6 +782,57 @@ class LazerAsync(LazerBase):
             else:
                 raise await self._status_error(response)
 
+    async def _request_performance_beatmap_id(
+        self,
+        beatmap_id: int,
+        mods: list[OsuMod] | None,
+        hit_stats: HitStatistics | None = None,
+        replay: BinaryIO | None = None,
+    ) -> aiohttp.ClientResponse:
+        """Queries for the performance of a play given a beatmap ID."""
+        if hit_stats is not None:
+            params = hit_stats.to_dict()
+            if mods is not None:
+                params["mods"] = [mod.value for mod in mods]
+            return await self.session.get(
+                f"/api/performance/{beatmap_id}", params=params
+            )
+        elif replay is not None:
+            return await self.session.post(
+                f"/api/performance/replay/{beatmap_id}", data={"replay": replay}
+            )
+        else:
+            raise ValueError(
+                "Exactly one of `hit_stats` and `replay` must be populated when"
+                " calculating performance with a beatmap ID"
+            )
+
+    async def _request_performance_beatmap(
+        self,
+        beatmap: BinaryIO,
+        mods: list[OsuMod] | None,
+        hit_stats: HitStatistics | None = None,
+        replay: BinaryIO | None = None,
+    ) -> aiohttp.ClientResponse:
+        """Queries for the performance of a play given a beatmap ID."""
+        if hit_stats is not None:
+            params = hit_stats.to_dict()
+            if mods is not None:
+                params["mods"] = [mod.value for mod in mods]
+            return await self.session.post(
+                "/api/performance", params=params, data={"beatmap": beatmap}
+            )
+        elif replay is not None:
+            return await self.session.post(
+                "/api/performance/replay",
+                data={"beatmap": beatmap, "replay": replay},
+            )
+        else:
+            raise ValueError(
+                "Exactly one of `hit_stats` and `replay` must be populated when"
+                " calculating performance with a beatmap"
+            )
+
     async def calculate_performance(
         self,
         *,
@@ -772,13 +850,14 @@ class LazerAsync(LazerBase):
         made on (through exactly one of `beatmap_id`, `beatmap` or `difficulty`) and
         a method of describing the play itself (through exactly one of `hit_stats` and
         `replay`). However, processing a replay is not possible with difficulty
-        attributes alone, so using `replay` requires the use of `hit_stats`.
+        attributes alone, so using `difficulty` requires the use of `hit_stats`.
 
         Parameters
         ----------
         beatmap_id : int, optional
         beatmap : binary file stream, optional
         mods : list of OsuMod enums, optional
+            For use with either `beatmap` or `beatmap_id`.
         difficulty : OsuDifficultyAttributes, optional
             Difficulty attribute instance, as returned by `calculate_difficulty()`.
         hit_stats : HitStatistics, optional
@@ -790,46 +869,23 @@ class LazerAsync(LazerBase):
             Dataclass encoding the performance values of the requested play.
         """
         if beatmap_id is not None:
-            if hit_stats is not None:
-                params = hit_stats.to_dict()
-                if mods is not None:
-                    params["mods"] = [mod.value for mod in mods]
-                response = await self.session.get(
-                    f"/api/performance/{beatmap_id}", params=params
-                )
-            elif replay is not None:
-                response = await self.session.post(
-                    f"/api/performance/replay/{beatmap_id}", data={"replay": replay}
-                )
-            else:
-                raise ValueError(
-                    "Exactly one of `hit_stats` and `replay` must be populated when"
-                    " calculating performance with a beatmap ID"
-                )
-
+            response = await self._request_performance_beatmap_id(
+                beatmap_id, mods, hit_stats, replay
+            )
         elif beatmap is not None:
+            response = await self._request_performance_beatmap(
+                beatmap, mods, hit_stats, replay
+            )
+        elif difficulty is not None:
             if hit_stats is not None:
-                params = hit_stats.to_dict()
-                if mods is not None:
-                    params["mods"] = [mod.value for mod in mods]
-                response = await self.session.post(
-                    "/api/performance", params=params, data={"beatmap": beatmap}
-                )
-            elif replay is not None:
-                response = await self.session.post(
-                    "/api/performance/replay",
-                    data={"beatmap": beatmap, "replay": replay},
+                response = await self.session.get(
+                    "/api/performance",
+                    params=difficulty.to_dict() | hit_stats.to_dict(),
                 )
             else:
                 raise ValueError(
-                    "Exactly one of `hit_stats` and `replay` must be populated when"
-                    " calculating performance with a beatmap"
+                    "`hit_stats` must be populated when querying with `difficulty`"
                 )
-
-        elif difficulty is not None and hit_stats is not None:
-            params = difficulty.to_dict() | hit_stats.to_dict()
-            response = await self.session.get("/api/performance", params=params)
-
         else:
             raise ValueError(
                 "Exactly one of `beatmap_id`, `beatmap`, and `difficulty` must be"
